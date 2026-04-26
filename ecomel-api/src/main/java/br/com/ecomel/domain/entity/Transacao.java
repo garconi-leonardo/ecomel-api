@@ -15,6 +15,11 @@ import java.math.BigDecimal;
 @Setter
 public class Transacao extends BaseAuditavel {
 
+    
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "carteira_destino_id")
+    private Carteira carteiraDestino; // Preenchido apenas em TRANSFERENCIA_INTERNA
+	
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "carteira_id", nullable = false)
     private Carteira carteira;
@@ -35,4 +40,5 @@ public class Transacao extends BaseAuditavel {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private StatusTransacao status = StatusTransacao.PENDENTE;
+
 }

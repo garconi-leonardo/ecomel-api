@@ -2,12 +2,16 @@ package br.com.ecomel.controller;
 
 import br.com.ecomel.dto.request.DepositoRequest;
 import br.com.ecomel.dto.request.SaqueRequest;
+import br.com.ecomel.dto.response.TransacaoResponse;
 import br.com.ecomel.service.TransacaoService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+
+import java.util.List;
+
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -34,5 +38,11 @@ public class TransacaoController {
         service.processarSaque(request.usuarioId(), request.valor());
         return ResponseEntity.ok().build();
     }
-
+    
+    @GetMapping("/extrato/{usuarioId}")
+    @Operation(summary = "Obter extrato completo", description = "Lista depósitos, saques e transferências")
+    public ResponseEntity<List<TransacaoResponse>> obterExtrato(@PathVariable Long usuarioId) {
+        return ResponseEntity.ok(service.listarTransacoesPorUsuario(usuarioId));
+    }
+    
 }

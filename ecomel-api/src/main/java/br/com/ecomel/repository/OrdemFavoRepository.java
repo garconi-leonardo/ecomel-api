@@ -1,6 +1,9 @@
 package br.com.ecomel.repository;
 
 import br.com.ecomel.domain.entity.OrdemFavo;
+import br.com.ecomel.domain.enums.StatusOrdem;
+import br.com.ecomel.domain.enums.TipoOrdem;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -22,4 +25,24 @@ public interface OrdemFavoRepository extends JpaRepository<OrdemFavo, Long> {
            "AND o.precoUnitario >= :preco " +
            "ORDER BY o.precoUnitario DESC, o.criadoEm ASC")
     List<OrdemFavo> findComprasCompativeis(@Param("preco") BigDecimal preco);
+    
+    /**
+     * Busca ordens de venda para o comprador. 
+     * Ordena pelo menor preço primeiro (Melhor oferta de compra).
+     */
+    List<OrdemFavo> findByTipoAndStatusOrderByPrecoUnitarioAsc(TipoOrdem tipo, StatusOrdem status);
+
+    /**
+     * Busca ordens de compra para o vendedor. 
+     * Ordena pelo maior preço primeiro (Melhor oferta de venda).
+     */
+    List<OrdemFavo> findByTipoAndStatusOrderByPrecoUnitarioDesc(TipoOrdem tipo, StatusOrdem status);
+    
+    @Query("SELECT SUM(o.quantidadeRestante) FROM OrdemFavo o WHERE o.carteira.id = :carteiraId AND o.tipo = :tipo AND o.status = :status")
+    BigDecimal sumQuantidadeRestanteByCarteiraAndTipoAndStatus(Long carteiraId, TipoOrdem tipo, StatusOrdem status);
+
+    @Query("SELECT SUM(o.quantidadeRestante * o.precoUnitario) FROM OrdemFavo o WHERE o.carteira.id = :carteiraId AND o.tipo = :tipo AND o.status = :status")
+    BigDecimal sumValorEcmBloqueado(Long carteiraId, TipoOrdem tipo, StatusOrdem status);
+
+
 }

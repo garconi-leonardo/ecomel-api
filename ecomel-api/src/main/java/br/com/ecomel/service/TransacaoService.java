@@ -2,14 +2,17 @@ package br.com.ecomel.service;
 
 import br.com.ecomel.domain.entity.Carteira;
 import br.com.ecomel.domain.entity.IndiceGlobal;
+import br.com.ecomel.dto.response.TransacaoResponse;
 import br.com.ecomel.repository.CarteiraRepository;
 import br.com.ecomel.repository.IndiceGlobalRepository;
+import br.com.ecomel.repository.TransacaoRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -18,6 +21,7 @@ public class TransacaoService {
 
     private final IndiceGlobalRepository indiceRepository;
     private final CarteiraRepository carteiraRepository;
+    private final TransacaoRepository transacaoRepository;
 
     @Transactional
     public void processarDeposito(Long usuarioId, BigDecimal valor) {
@@ -68,6 +72,23 @@ public class TransacaoService {
         indiceRepository.save(indice);
         carteiraRepository.save(carteira);
     }
+    
+    @Transactional(readOnly = true)
+    public List<TransacaoResponse> listarTransacoesPorUsuario(Long usuarioId) {
+        return transacaoRepository.findByCarteiraUsuarioIdOrderByCriadoEmDesc(usuarioId)
+            .stream()
+            .map(t -> new TransacaoResponse(
+                t.getId(),
+                t.getTipo(),
+                t.getValorBruto(),
+                t.getValorLiquido(),
+                t.getTaxaTotal(),
+                t.getStatus(),
+                t.getCriadoEm(),
+                t.getCarteiraDestino() != null ? t.getCarteiraDestino().getCodigoEndereco() : null
+            )).toList();
+    }
+
 
 }
 
