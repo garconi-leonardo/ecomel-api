@@ -15,6 +15,9 @@ import java.math.BigDecimal;
 @Setter
 public class Transacao extends BaseAuditavel {
 
+
+	@Column(unique = true, length = 64)
+	private String requestKey; // UUID enviado pelo Front-end
     
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "carteira_destino_id")

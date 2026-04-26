@@ -8,5 +8,6 @@ import java.math.BigDecimal;
 public record TransferenciaRequest(
     @NotNull Long usuarioOrigemId,
     @NotBlank String codigoDestino, // Ex: AAA111
-    @NotNull @Positive BigDecimal valorReal // Valor valorizado que deseja enviar
+    @NotNull @Positive BigDecimal valorReal, // Valor valorizado que deseja enviar
+    @NotBlank String requestKey // UUID único gerado no clique do botão
 ) {}

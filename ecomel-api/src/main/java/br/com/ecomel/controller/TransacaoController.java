@@ -10,16 +10,15 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-
-import java.util.List;
-
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/transacoes")
 @RequiredArgsConstructor
-@Tag(name = "Transações", description = "Operações de Depósito e Saque (Externas)")
+@Tag(name = "Transações", description = "Operações de Depósito, Saque e Transferência")
 @SecurityRequirement(name = "bearerAuth")
 public class TransacaoController {
 
@@ -28,15 +27,16 @@ public class TransacaoController {
     @PostMapping("/deposito")
     @Operation(summary = "Realizar depósito", description = "Injeta capital e valoriza o Índice Global em 5%")
     public ResponseEntity<Void> depositar(@RequestBody @Valid DepositoRequest request) {
-        service.processarDeposito(request.usuarioId(), request.valor());
+        // Adicionado o parâmetro requestKey para idempotência
+        service.processarDeposito(request.usuarioId(), request.valor(), request.requestKey());
         return ResponseEntity.ok().build();
     }
 
     @PostMapping("/saque")
     @Operation(summary = "Realizar saque", description = "Retira capital e valoriza o Índice Global em 5%")
-    public ResponseEntity<Void> sacar(@RequestBody @Valid DepositoRequest request) {
-        // Na lógica da ECOMEL, saques também são transações externas que valorizam o índice
-        service.processarSaque(request.usuarioId(), request.valor());
+    public ResponseEntity<Void> sacar(@RequestBody @Valid SaqueRequest request) {
+        // Corrigido para SaqueRequest e adicionado requestKey
+        service.processarSaque(request.usuarioId(), request.valor(), request.requestKey());
         return ResponseEntity.ok().build();
     }
     
@@ -49,9 +49,8 @@ public class TransacaoController {
     @PostMapping("/transferencia")
     @Operation(summary = "Transferência interna", description = "Envia ECM para outra carteira usando o código AAA111")
     public ResponseEntity<Void> transferir(@RequestBody @Valid TransferenciaRequest request) {
-        service.transferirInterno(request);
+        // Adicionado o parâmetro requestKey para idempotência
+        service.transferirInterno(request, request.requestKey());
         return ResponseEntity.ok().build();
     }
-
-    
 }

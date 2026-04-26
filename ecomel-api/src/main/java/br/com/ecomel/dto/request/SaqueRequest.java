@@ -1,5 +1,6 @@
 package br.com.ecomel.dto.request;
 
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import java.math.BigDecimal;
@@ -14,5 +15,8 @@ public record SaqueRequest(
 
     @NotNull(message = "O valor do saque é obrigatório")
     @Positive(message = "O valor deve ser maior que zero")
-    BigDecimal valor
+    BigDecimal valor,
+    
+    @NotBlank 
+    String requestKey // UUID único gerado no clique do botão
 ) {}

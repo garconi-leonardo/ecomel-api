@@ -7,5 +7,6 @@ import jakarta.validation.constraints.Size;
 public record UsuarioRequest(
     @NotBlank String nome,
     @NotBlank @Email String email,
-    @NotBlank @Size(min = 6) String senha
+    @NotBlank @Size(min = 6) String senha,
+    @NotBlank String requestKey // UUID único gerado no clique do botão
 ) {}

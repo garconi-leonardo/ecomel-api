@@ -19,4 +19,10 @@ public interface TransacaoRepository extends JpaRepository<Transacao, Long> {
      * Busca transações onde a carteira do usuário foi o destino (recebimento de transferência).
      */
     List<Transacao> findByCarteiraDestinoUsuarioIdOrderByCriadoEmDesc(Long usuarioId);
+    
+    /**
+     * Verifica se uma transação com esta chave de idempotência já existe.
+     * Evita que a mesma operação seja processada duas vezes.
+     */
+    boolean existsByRequestKey(String requestKey);
 }
