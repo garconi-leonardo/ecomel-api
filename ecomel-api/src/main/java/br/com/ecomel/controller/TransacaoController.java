@@ -29,14 +29,6 @@ public class TransacaoController {
 
     @PostMapping("/saque")
     @Operation(summary = "Realizar saque", description = "Retira capital e valoriza o Índice Global em 5%")
-    public ResponseEntity<Void> sacar(@RequestBody @Valid DepositoRequest request) {
-        // Na lógica da ECOMEL, saques também são transações externas que valorizam o índice
-        service.processarSaque(request.usuarioId(), request.valor());
-        return ResponseEntity.ok().build();
-    }
-    
-    @PostMapping("/saque")
-    @Operation(summary = "Realizar saque", description = "Retira capital e valoriza o Índice Global em 5%")
     public ResponseEntity<Void> sacar(@RequestBody @Valid SaqueRequest request) {
         service.processarSaque(request.usuarioId(), request.valor());
         return ResponseEntity.ok().build();
