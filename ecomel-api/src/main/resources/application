@@ -1,0 +1,2 @@
+app.jwt.secret=MinhaChaveSuperSecretaComMaisDe64CaracteresParaGarantirASegurancaDoSistemaEcomel2024
+app.jwt.expiration=86400000
