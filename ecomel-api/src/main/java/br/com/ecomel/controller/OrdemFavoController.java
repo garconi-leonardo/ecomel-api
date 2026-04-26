@@ -23,4 +23,12 @@ public class OrdemFavoController {
         ordemFavoService.criarEProcessarOrdem(request);
         return ResponseEntity.ok().build();
     }
+    
+    @DeleteMapping("/{ordemId}/usuario/{usuarioId}")
+    @Operation(summary = "Cancelar Ordem", description = "Cancela uma ordem aberta e devolve o saldo bloqueado para a carteira")
+    public ResponseEntity<Void> cancelarOrdem(@PathVariable Long ordemId, @PathVariable Long usuarioId) {
+        ordemFavoService.cancelarOrdem(usuarioId, ordemId);
+        return ResponseEntity.noContent().build();
+    }
+
 }

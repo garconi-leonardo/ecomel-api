@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import java.math.BigDecimal;
+import java.util.Collection;
 import java.util.List;
 
 public interface OrdemFavoRepository extends JpaRepository<OrdemFavo, Long> {
@@ -44,5 +45,9 @@ public interface OrdemFavoRepository extends JpaRepository<OrdemFavo, Long> {
     @Query("SELECT SUM(o.quantidadeRestante * o.precoUnitario) FROM OrdemFavo o WHERE o.carteira.id = :carteiraId AND o.tipo = :tipo AND o.status = :status")
     BigDecimal sumValorEcmBloqueado(Long carteiraId, TipoOrdem tipo, StatusOrdem status);
 
-
+    /**
+     * Busca ordens de uma carteira específica filtrando por uma coleção de status.
+     * Essencial para listar as 'Minhas Ordens' na Consulta Detalhada.
+     */
+    List<OrdemFavo> findByCarteiraUsuarioIdAndStatusIn(Long usuarioId, Collection<StatusOrdem> statuses);
 }

@@ -57,4 +57,39 @@ public class OrdemFavoService {
         // 3. Disparar Matching Engine
         matchingEngine.processarMatch(ordem);
     }
+    
+    @Transactional
+    public void cancelarOrdem(Long usuarioId, Long ordemId) {
+        OrdemFavo ordem = repository.findById(ordemId)
+                .orElseThrow(() -> new BusinessException("Ordem não encontrada."));
+
+        // 1. Validar se a ordem pertence ao usuário
+        if (!ordem.getCarteira().getUsuario().getId().equals(usuarioId)) {
+            throw new BusinessException("Você não tem permissão para cancelar esta ordem.");
+        }
+
+        // 2. Validar se a ordem ainda está passível de cancelamento
+        if (ordem.getStatus() == StatusOrdem.EXECUTADA || ordem.getStatus() == StatusOrdem.CANCELADA) {
+            throw new BusinessException("Esta ordem já foi finalizada ou cancelada.");
+        }
+
+        Carteira carteira = ordem.getCarteira();
+
+        // 3. Devolver Saldos Bloqueados
+        if (ordem.getTipo() == TipoOrdem.VENDA) {
+            // Devolve a quantidade de FAVOS que ainda não foi vendida
+            carteira.setSaldoFavos(carteira.getSaldoFavos().add(ordem.getQuantidadeRestante()));
+        } else {
+            // Devolve o montante em ECM (Quantidade * Preço) que ainda não foi usado
+            BigDecimal valorDevolucaoEcm = ordem.getQuantidadeRestante().multiply(ordem.getPrecoUnitario());
+            carteira.setSaldoBase(carteira.getSaldoBase().add(valorDevolucaoEcm));
+        }
+
+        // 4. Atualizar Status
+        ordem.setStatus(StatusOrdem.CANCELADA);
+        
+        repository.save(ordem);
+        carteiraRepository.save(carteira);
+    }
+
 }
