@@ -1,14 +1,18 @@
 package br.com.ecomel.controller;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import br.com.ecomel.domain.entity.Usuario;
 import br.com.ecomel.dto.request.UsuarioRequest;
+import br.com.ecomel.dto.response.UsuarioResponse;
 import br.com.ecomel.service.UsuarioService;
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
@@ -32,5 +36,13 @@ public class UsuarioController {
     public ResponseEntity<Void> deletar(@PathVariable Long id) {
         service.inativar(id);
         return ResponseEntity.noContent().build();
+    }
+    
+    @PostMapping
+    @Operation(summary = "Cadastrar usuário")
+    public ResponseEntity<UsuarioResponse> cadastrar(@RequestBody @Valid UsuarioRequest request) {
+        Usuario u = service.salvar(request);
+        UsuarioResponse body = new UsuarioResponse(u.getId(), u.getNome(), u.getEmail(), u.getCriadoEm());
+        return ResponseEntity.status(HttpStatus.CREATED).body(body);
     }
 }
