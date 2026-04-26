@@ -1,9 +1,10 @@
 package br.com.ecomel.config;
 
 import br.com.ecomel.security.JwtAuthenticationFilter;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
@@ -18,10 +19,15 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 
 @Configuration
 @EnableWebSecurity
-@RequiredArgsConstructor
 public class SecurityConfig {
 
-    private final JwtAuthenticationFilter jwtAuthenticationFilter; // Injeção obrigatória do filtro
+    private JwtAuthenticationFilter jwtAuthenticationFilter;
+
+    // Injeção via Setter com @Lazy para quebrar o ciclo de dependência
+    @Autowired
+    public void setJwtAuthenticationFilter(@Lazy JwtAuthenticationFilter jwtAuthenticationFilter) {
+        this.jwtAuthenticationFilter = jwtAuthenticationFilter;
+    }
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -45,7 +51,7 @@ public class SecurityConfig {
                 .anyRequest().authenticated()
             );
 
-        // Adiciona o filtro JWT antes do filtro de autenticação padrão do Spring
+        // Adiciona o filtro JWT antes do filtro padrão de usuário/senha
         http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
