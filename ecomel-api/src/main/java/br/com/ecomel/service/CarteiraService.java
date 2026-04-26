@@ -1,6 +1,5 @@
 package br.com.ecomel.service;
 
-
 import br.com.ecomel.domain.entity.Carteira;
 import br.com.ecomel.domain.entity.IndiceGlobal;
 import br.com.ecomel.dto.response.CarteiraResponse;
