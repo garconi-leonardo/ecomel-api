@@ -1,8 +1,10 @@
 package br.com.ecomel.service;
 
+import br.com.ecomel.domain.entity.Carteira;
 import br.com.ecomel.domain.entity.OrdemFavo;
 import br.com.ecomel.domain.enums.StatusOrdem;
 import br.com.ecomel.domain.enums.TipoOrdem;
+import br.com.ecomel.repository.CarteiraRepository;
 import br.com.ecomel.repository.OrdemFavoRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -15,42 +17,64 @@ import java.util.List;
 public class MatchingEngineService {
 
     private final OrdemFavoRepository ordemRepository;
+    private final CarteiraRepository carteiraRepository;
 
     @Transactional
     public void processarMatch(OrdemFavo novaOrdem) {
-        // Se for COMPRA, busca VENDAS com preço <= ao meu. Se for VENDA, busca COMPRAS com preço >= ao meu.
-        List<OrdemFavo> ordensCompativeis = (novaOrdem.getTipo() == TipoOrdem.COMPRA) ?
+        // Busca ordens compatíveis no book
+        List<OrdemFavo> compativeis = (novaOrdem.getTipo() == TipoOrdem.COMPRA) ?
             ordemRepository.findVendasCompativeis(novaOrdem.getPrecoUnitario()) :
             ordemRepository.findComprasCompativeis(novaOrdem.getPrecoUnitario());
 
-        for (OrdemFavo ordemAberta : ordensCompativeis) {
+        for (OrdemFavo aberta : compativeis) {
             if (novaOrdem.getQuantidadeRestante().compareTo(BigDecimal.ZERO) <= 0) break;
 
-            BigDecimal quantidadeNegociada = novaOrdem.getQuantidadeRestante().min(ordemAberta.getQuantidadeRestante());
+            // Quantidade que será negociada agora
+            BigDecimal qtdNegociada = novaOrdem.getQuantidadeRestante().min(aberta.getQuantidadeRestante());
+            
+            // Preço de execução (sempre o preço de quem já estava no book)
+            BigDecimal precoExecucao = aberta.getPrecoUnitario();
+            BigDecimal volumeEcm = qtdNegociada.multiply(precoExecucao);
 
-            // Execução do Trade
-            executarTrade(novaOrdem, ordemAberta, quantidadeNegociada);
+            // Realizar a troca de ativos
+            executarTroca(novaOrdem, aberta, qtdNegociada, volumeEcm);
 
-            // Atualiza saldos restantes
-            novaOrdem.setQuantidadeRestante(novaOrdem.getQuantidadeRestante().subtract(quantidadeNegociada));
-            ordemAberta.setQuantidadeRestante(ordemAberta.getQuantidadeRestante().subtract(quantidadeNegociada));
+            // Atualizar ordens
+            novaOrdem.setQuantidadeRestante(novaOrdem.getQuantidadeRestante().subtract(qtdNegociada));
+            aberta.setQuantidadeRestante(aberta.getQuantidadeRestante().subtract(qtdNegociada));
 
-            atualizarStatus(ordemAberta);
+            atualizarStatus(aberta);
+            ordemRepository.save(aberta);
         }
         atualizarStatus(novaOrdem);
         ordemRepository.save(novaOrdem);
     }
 
-    private void executarTrade(OrdemFavo nova, OrdemFavo aberta, BigDecimal qtd) {
-        // Aqui entra a lógica de transferir ECM de um e FAVOS de outro
-        // Usaremos o precoUnitario da ordem que já estava no book (aberta)
+    private void executarTroca(OrdemFavo nova, OrdemFavo aberta, BigDecimal qtd, BigDecimal ecm) {
+        Carteira comprador = (nova.getTipo() == TipoOrdem.COMPRA) ? nova.getCarteira() : aberta.getCarteira();
+        Carteira vendedor = (nova.getTipo() == TipoOrdem.VENDA) ? nova.getCarteira() : aberta.getCarteira();
+
+        // 1. Entrega FAVOS ao comprador
+        comprador.setSaldoFavos(comprador.getSaldoFavos().add(qtd));
+        
+        // 2. Entrega ECM ao vendedor
+        vendedor.setSaldoBase(vendedor.getSaldoBase().add(ecm));
+
+        // 3. Se o comprador pagou MAIS BARATO do que reservou originalmente (Sobra de ECM)
+        if (nova.getTipo() == TipoOrdem.COMPRA && nova.getPrecoUnitario().compareTo(aberta.getPrecoUnitario()) > 0) {
+             BigDecimal estornoEcm = qtd.multiply(nova.getPrecoUnitario().subtract(aberta.getPrecoUnitario()));
+             comprador.setSaldoBase(comprador.getSaldoBase().add(estornoEcm));
+        }
+
+        carteiraRepository.save(comprador);
+        carteiraRepository.save(vendedor);
     }
 
-    private void atualizarStatus(OrdemFavo ordem) {
-        if (ordem.getQuantidadeRestante().compareTo(BigDecimal.ZERO) == 0) {
-            ordem.setStatus(StatusOrdem.EXECUTADA);
-        } else {
-            ordem.setStatus(StatusOrdem.PARCIAL);
+    private void atualizarStatus(OrdemFavo o) {
+        if (o.getQuantidadeRestante().compareTo(BigDecimal.ZERO) == 0) {
+            o.setStatus(StatusOrdem.EXECUTADA);
+        } else if (o.getQuantidadeRestante().compareTo(o.getQuantidadeOriginal()) < 0) {
+            o.setStatus(StatusOrdem.PARCIAL);
         }
     }
 }
