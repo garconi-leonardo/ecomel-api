@@ -2,7 +2,7 @@
 CREATE TABLE usuarios (
     id BIGSERIAL PRIMARY KEY,
     nome VARCHAR(255) NOT NULL,
-    email VARCHAR(255) UNIQUE, -- Removido NOT NULL
+    email VARCHAR(255) UNIQUE, 
     senha VARCHAR(255) NOT NULL,
     status VARCHAR(50) NOT NULL,
     ativo BOOLEAN NOT NULL DEFAULT TRUE,
@@ -21,14 +21,14 @@ CREATE TABLE usuario_perfis (
     CONSTRAINT fk_usuario_perfis FOREIGN KEY (usuario_id) REFERENCES usuarios (id)
 );
 
--- 3. Tabela de Carteiras (Já inclui o Código de Endereço AAA000)
+-- 3. Tabela de Carteiras (Inclui Código Alfanumérico e controle de dividendos)
 CREATE TABLE carteiras (
     id BIGSERIAL PRIMARY KEY,
     usuario_id BIGINT NOT NULL UNIQUE,
-    codigo_endereco VARCHAR(20) NOT NULL UNIQUE, -- Identificador alfanumérico
+    codigo_endereco VARCHAR(20) NOT NULL UNIQUE, 
     saldo_base DECIMAL(20, 18) NOT NULL DEFAULT 0,
     saldo_favos DECIMAL(20, 8) NOT NULL DEFAULT 0,
-    ultimo_indice_favo DECIMAL(20, 18) NOT NULL DEFAULT 0, -- Para dividendos passivos
+    ultimo_indice_favo DECIMAL(20, 18) NOT NULL DEFAULT 0, 
     ativo BOOLEAN NOT NULL DEFAULT TRUE,
     criado_em TIMESTAMP NOT NULL,
     criado_por VARCHAR(255),
@@ -39,14 +39,14 @@ CREATE TABLE carteiras (
     CONSTRAINT fk_carteira_usuario FOREIGN KEY (usuario_id) REFERENCES usuarios (id)
 );
 
--- Índice para busca rápida de carteira via código
 CREATE INDEX idx_carteira_codigo_busca ON carteiras(codigo_endereco);
 
--- 4. Tabela de Transações (Completa com suporte a transferências internas)
+-- 4. Tabela de Transações (Com chave de Idempotência request_key)
 CREATE TABLE transacoes (
     id BIGSERIAL PRIMARY KEY,
     carteira_id BIGINT NOT NULL,
-    carteira_destino_id BIGINT, -- Preenchido em transferências entre carteiras
+    carteira_destino_id BIGINT, 
+    request_key VARCHAR(64) UNIQUE, -- Proteção contra transações duplicadas
     tipo VARCHAR(50) NOT NULL,
     valor_bruto DECIMAL(20, 18) NOT NULL,
     valor_liquido DECIMAL(20, 18) NOT NULL,
@@ -64,12 +64,13 @@ CREATE TABLE transacoes (
 );
 
 CREATE INDEX idx_transacao_carteira_id ON transacoes(carteira_id);
+CREATE INDEX idx_transacao_request_key ON transacoes(request_key);
 
 -- 5. Tabela de Índice Global (Com acumulador de dividendos de FAVOS)
 CREATE TABLE indice_global (
     id BIGSERIAL PRIMARY KEY,
     valor DECIMAL(20, 18) NOT NULL DEFAULT 1.0,
-    indice_favo_acumulado DECIMAL(20, 18) NOT NULL DEFAULT 0, -- Acumulador global
+    indice_favo_acumulado DECIMAL(20, 18) NOT NULL DEFAULT 0, 
     ativo BOOLEAN NOT NULL DEFAULT TRUE,
     criado_em TIMESTAMP NOT NULL,
     criado_por VARCHAR(255),
