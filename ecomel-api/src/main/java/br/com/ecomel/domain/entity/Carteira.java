@@ -27,6 +27,9 @@ public class Carteira extends BaseAuditavel {
     // Saldo de FAVOS (Ativo negociável)
     @Column(nullable = false, precision = 20, scale = 8)
     private BigDecimal saldoFavos = BigDecimal.ZERO;
+    
+    @Column(nullable = false, precision = 20, scale = 18)
+    private BigDecimal ultimoIndiceFavo = BigDecimal.ZERO;
 
     /**
      * Calcula o saldo real em ECM.

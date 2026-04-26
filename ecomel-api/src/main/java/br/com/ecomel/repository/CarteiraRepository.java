@@ -3,6 +3,9 @@ package br.com.ecomel.repository;
 import br.com.ecomel.domain.entity.Carteira;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+
+import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
 
 public interface CarteiraRepository extends JpaRepository<Carteira, Long> {
@@ -16,4 +19,11 @@ public interface CarteiraRepository extends JpaRepository<Carteira, Long> {
     
     @Query("SELECT c FROM Carteira c WHERE c.usuario.id = :usuarioId")
     Carteira findByUsuarioId(Long usuarioId);
+    
+    @Query("SELECT SUM(c.saldoFavos) FROM Carteira c")
+    BigDecimal sumTotalFavos();
+
+    @Query("SELECT c FROM Carteira c WHERE c.saldoFavos > 0")
+    List<Carteira> findAllBySaldoFavosGreaterThanZero();
+
 }

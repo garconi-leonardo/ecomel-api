@@ -21,119 +21,129 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
-//Aqui implementamos a regra: 10% de taxa, sendo 5% direto para o Índice Global.
 public class TransacaoService {
 
     private final IndiceGlobalRepository indiceRepository;
     private final CarteiraRepository carteiraRepository;
     private final TransacaoRepository transacaoRepository;
+    private final DistribuicaoService distribuicaoService;
 
     @Transactional
-    public void processarDeposito(Long usuarioId, BigDecimal valor) {
-        // 1. Lock no Índice e na Carteira (Consistência)
+    public void processarDeposito(Long usuarioId, BigDecimal valorReal) {
         IndiceGlobal indice = indiceRepository.findFirstByAtivoTrue();
         Carteira carteira = carteiraRepository.findByUsuarioId(usuarioId);
 
-        // 2. Cálculos de Taxas (10% total)
-        BigDecimal taxaTotal = valor.multiply(new BigDecimal("0.10"));
-        BigDecimal taxaIndice = valor.multiply(new BigDecimal("0.05")); // 5% p/ revalorização
-        BigDecimal valorLiquido = valor.subtract(taxaTotal);
+        BigDecimal taxaTotalReal = valorReal.multiply(new BigDecimal("0.10"));
+        BigDecimal valorLiquidoReal = valorReal.subtract(taxaTotalReal);
 
-        // 3. Atualizar Índice Global (Fórmula: i = i * (1 + 0.05))
-        // Nota: A regra diz que cresce com a transação externa
+        // Valorização do Índice (5%)
         BigDecimal fatorCrescimento = BigDecimal.ONE.add(new BigDecimal("0.05"));
         indice.setValor(indice.getValor().multiply(fatorCrescimento));
-        
-        // 4. Converter valor líquido para Saldo Base e atualizar carteira
-        // balanceBase += valor_liquido / novo_indice
-        BigDecimal incrementoBase = valorLiquido.divide(indice.getValor(), 18, RoundingMode.HALF_UP);
+
+        // Crédito no Saldo Base
+        BigDecimal incrementoBase = valorLiquidoReal.divide(indice.getValor(), 18, RoundingMode.HALF_UP);
         carteira.setSaldoBase(carteira.getSaldoBase().add(incrementoBase));
 
-        // 5. Salvar (Auditoria automática via JPA)
+        // Distribuição FAVOS (4,01% do bruto convertido em base)
+        BigDecimal montanteFavosBase = valorReal.multiply(new BigDecimal("0.0401"))
+                                               .divide(indice.getValor(), 18, RoundingMode.HALF_UP);
+        distribuicaoService.distribuirTaxaFavos(montanteFavosBase);
+
+        salvarTransacao(carteira, valorReal, valorLiquidoReal, taxaTotalReal, TipoTransacao.DEPOSITO);
+
         indiceRepository.save(indice);
         carteiraRepository.save(carteira);
     }
-    
+
     @Transactional
     public void processarSaque(Long usuarioId, BigDecimal valorSaqueReal) {
         IndiceGlobal indice = indiceRepository.findFirstByAtivoTrue();
         Carteira carteira = carteiraRepository.findByUsuarioId(usuarioId);
 
-        // 1. Validar se tem saldo real suficiente
-        BigDecimal saldoRealAtual = carteira.getSaldoReal(indice.getValor());
-        if (saldoRealAtual.compareTo(valorSaqueReal) < 0) {
-            throw new RuntimeException("Saldo insuficiente");
+        // Validação de saldo real
+        if (carteira.getSaldoReal(indice.getValor()).compareTo(valorSaqueReal) < 0) {
+            throw new BusinessException("Saldo insuficiente para saque.");
         }
 
-        // 2. Atualizar Índice Global (Valorização por transação externa)
+        BigDecimal taxaTotalReal = valorSaqueReal.multiply(new BigDecimal("0.10"));
+        
+        // Valorização do Índice (5% também no saque por ser transação externa)
         BigDecimal fatorCrescimento = BigDecimal.ONE.add(new BigDecimal("0.05"));
         indice.setValor(indice.getValor().multiply(fatorCrescimento));
 
-        // 3. Converter o valor do saque (Real) para o que deve ser removido do Base
-        // quantidade_base = valor_saque_real / novo_indice
+        // Débito no Saldo Base (Retira o valor bruto do saque do usuário)
         BigDecimal debitoBase = valorSaqueReal.divide(indice.getValor(), 18, RoundingMode.HALF_UP);
         carteira.setSaldoBase(carteira.getSaldoBase().subtract(debitoBase));
+
+        // Distribuição FAVOS (4,01% do saque convertido em base)
+        BigDecimal montanteFavosBase = valorSaqueReal.multiply(new BigDecimal("0.0401"))
+                                               .divide(indice.getValor(), 18, RoundingMode.HALF_UP);
+        distribuicaoService.distribuirTaxaFavos(montanteFavosBase);
+
+        salvarTransacao(carteira, valorSaqueReal, valorSaqueReal.subtract(taxaTotalReal), taxaTotalReal, TipoTransacao.SAQUE);
 
         indiceRepository.save(indice);
         carteiraRepository.save(carteira);
     }
-    
-    @Transactional(readOnly = true)
-    public List<TransacaoResponse> listarTransacoesPorUsuario(Long usuarioId) {
-        return transacaoRepository.findByCarteiraUsuarioIdOrderByCriadoEmDesc(usuarioId)
-            .stream()
-            .map(t -> new TransacaoResponse(
-                t.getId(),
-                t.getTipo(),
-                t.getValorBruto(),
-                t.getValorLiquido(),
-                t.getTaxaTotal(),
-                t.getStatus(),
-                t.getCriadoEm(),
-                t.getCarteiraDestino() != null ? t.getCarteiraDestino().getCodigoEndereco() : null
-            )).toList();
-    }
-    
+
     @Transactional
     public void transferirInterno(TransferenciaRequest request) {
         IndiceGlobal indice = indiceRepository.findFirstByAtivoTrue();
-        
-        // 1. Localiza a origem (por ID) e o destino (pelo Código AAA111)
         Carteira origem = carteiraRepository.findByUsuarioId(request.usuarioOrigemId());
         Carteira destino = carteiraRepository.findByCodigoEndereco(request.codigoDestino())
-            .orElseThrow(() -> new BusinessException("Carteira destino não encontrada: " + request.codigoDestino()));
+                .orElseThrow(() -> new BusinessException("Carteira destino não encontrada."));
 
-        if (origem.getId().equals(destino.getId())) {
-            throw new BusinessException("Não é permitido transferir para a própria carteira.");
-        }
+        BigDecimal valorBase = request.valorReal().divide(indice.getValor(), 18, RoundingMode.HALF_UP);
 
-        // 2. Valida saldo real disponível
-        BigDecimal saldoRealOrigem = origem.getSaldoReal(indice.getValor());
-        if (saldoRealOrigem.compareTo(request.valorReal()) < 0) {
+        if (origem.getSaldoBase().compareTo(valorBase) < 0) {
             throw new BusinessException("Saldo insuficiente para transferência.");
         }
 
-        // 3. Converte o valor real para valor base (Usa o índice atual sem alterá-lo)
-        BigDecimal valorBase = request.valorReal().divide(indice.getValor(), 18, RoundingMode.HALF_UP);
-
-        // 4. Executa a movimentação
         origem.setSaldoBase(origem.getSaldoBase().subtract(valorBase));
         destino.setSaldoBase(destino.getSaldoBase().add(valorBase));
 
-        // 5. Registra a transação no histórico
-        Transacao transacao = new Transacao();
-        transacao.setCarteira(origem);
-        transacao.setCarteiraDestino(destino);
-        transacao.setTipo(TipoTransacao.TRANSFERENCIA_INTERNA);
-        transacao.setValorBruto(request.valorReal());
-        transacao.setValorLiquido(request.valorReal()); // Sem taxas na interna
-        transacao.setTaxaTotal(BigDecimal.ZERO);
-        transacao.setStatus(StatusTransacao.CONCLUIDA);
+        salvarTransacaoInterna(origem, destino, request.valorReal());
 
         carteiraRepository.save(origem);
         carteiraRepository.save(destino);
-        transacaoRepository.save(transacao);
     }
 
-}
+    @Transactional(readOnly = true)
+    public List<TransacaoResponse> listarTransacoesPorUsuario(Long usuarioId) {
+        return transacaoRepository.findByCarteiraUsuarioIdOrderByCriadoEmDesc(usuarioId)
+                .stream()
+                .map(t -> new TransacaoResponse(
+                        t.getId(),
+                        t.getTipo(),
+                        t.getValorBruto(),
+                        t.getValorLiquido(),
+                        t.getTaxaTotal(),
+                        t.getStatus(),
+                        t.getCriadoEm(),
+                        t.getCarteiraDestino() != null ? t.getCarteiraDestino().getCodigoEndereco() : null
+                )).toList();
+    }
 
+    private void salvarTransacao(Carteira c, BigDecimal bruto, BigDecimal liq, BigDecimal taxa, TipoTransacao tipo) {
+        Transacao t = new Transacao();
+        t.setCarteira(c);
+        t.setTipo(tipo);
+        t.setValorBruto(bruto);
+        t.setValorLiquido(liq);
+        t.setTaxaTotal(taxa);
+        t.setStatus(StatusTransacao.CONCLUIDA);
+        transacaoRepository.save(t);
+    }
+
+    private void salvarTransacaoInterna(Carteira o, Carteira d, BigDecimal valor) {
+        Transacao t = new Transacao();
+        t.setCarteira(o);
+        t.setCarteiraDestino(d);
+        t.setTipo(TipoTransacao.TRANSFERENCIA_INTERNA);
+        t.setValorBruto(valor);
+        t.setValorLiquido(valor);
+        t.setTaxaTotal(BigDecimal.ZERO);
+        t.setStatus(StatusTransacao.CONCLUIDA);
+        transacaoRepository.save(t);
+    }
+}
