@@ -2,6 +2,7 @@ package br.com.ecomel.controller;
 
 import br.com.ecomel.dto.request.DepositoRequest;
 import br.com.ecomel.dto.request.SaqueRequest;
+import br.com.ecomel.dto.request.TransferenciaRequest;
 import br.com.ecomel.dto.response.TransacaoResponse;
 import br.com.ecomel.service.TransacaoService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -44,5 +45,13 @@ public class TransacaoController {
     public ResponseEntity<List<TransacaoResponse>> obterExtrato(@PathVariable Long usuarioId) {
         return ResponseEntity.ok(service.listarTransacoesPorUsuario(usuarioId));
     }
+    
+    @PostMapping("/transferencia")
+    @Operation(summary = "Transferência interna", description = "Envia ECM para outra carteira usando o código AAA111")
+    public ResponseEntity<Void> transferir(@RequestBody @Valid TransferenciaRequest request) {
+        service.transferirInterno(request);
+        return ResponseEntity.ok().build();
+    }
+
     
 }

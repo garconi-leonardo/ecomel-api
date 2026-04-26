@@ -2,7 +2,12 @@ package br.com.ecomel.service;
 
 import br.com.ecomel.domain.entity.Carteira;
 import br.com.ecomel.domain.entity.IndiceGlobal;
+import br.com.ecomel.domain.entity.Transacao;
+import br.com.ecomel.domain.enums.StatusTransacao;
+import br.com.ecomel.domain.enums.TipoTransacao;
+import br.com.ecomel.dto.request.TransferenciaRequest;
 import br.com.ecomel.dto.response.TransacaoResponse;
+import br.com.ecomel.exception.BusinessException;
 import br.com.ecomel.repository.CarteiraRepository;
 import br.com.ecomel.repository.IndiceGlobalRepository;
 import br.com.ecomel.repository.TransacaoRepository;
@@ -88,7 +93,47 @@ public class TransacaoService {
                 t.getCarteiraDestino() != null ? t.getCarteiraDestino().getCodigoEndereco() : null
             )).toList();
     }
+    
+    @Transactional
+    public void transferirInterno(TransferenciaRequest request) {
+        IndiceGlobal indice = indiceRepository.findFirstByAtivoTrue();
+        
+        // 1. Localiza a origem (por ID) e o destino (pelo Código AAA111)
+        Carteira origem = carteiraRepository.findByUsuarioId(request.usuarioOrigemId());
+        Carteira destino = carteiraRepository.findByCodigoEndereco(request.codigoDestino())
+            .orElseThrow(() -> new BusinessException("Carteira destino não encontrada: " + request.codigoDestino()));
 
+        if (origem.getId().equals(destino.getId())) {
+            throw new BusinessException("Não é permitido transferir para a própria carteira.");
+        }
+
+        // 2. Valida saldo real disponível
+        BigDecimal saldoRealOrigem = origem.getSaldoReal(indice.getValor());
+        if (saldoRealOrigem.compareTo(request.valorReal()) < 0) {
+            throw new BusinessException("Saldo insuficiente para transferência.");
+        }
+
+        // 3. Converte o valor real para valor base (Usa o índice atual sem alterá-lo)
+        BigDecimal valorBase = request.valorReal().divide(indice.getValor(), 18, RoundingMode.HALF_UP);
+
+        // 4. Executa a movimentação
+        origem.setSaldoBase(origem.getSaldoBase().subtract(valorBase));
+        destino.setSaldoBase(destino.getSaldoBase().add(valorBase));
+
+        // 5. Registra a transação no histórico
+        Transacao transacao = new Transacao();
+        transacao.setCarteira(origem);
+        transacao.setCarteiraDestino(destino);
+        transacao.setTipo(TipoTransacao.TRANSFERENCIA_INTERNA);
+        transacao.setValorBruto(request.valorReal());
+        transacao.setValorLiquido(request.valorReal()); // Sem taxas na interna
+        transacao.setTaxaTotal(BigDecimal.ZERO);
+        transacao.setStatus(StatusTransacao.CONCLUIDA);
+
+        carteiraRepository.save(origem);
+        carteiraRepository.save(destino);
+        transacaoRepository.save(transacao);
+    }
 
 }
 
