@@ -13,7 +13,10 @@ import java.math.BigDecimal;
 @Setter
 public class Carteira extends BaseAuditavel {
 
-    @OneToOne
+    @Column(nullable = false, unique = true, length = 20)
+    private String codigoEndereco; // Identificador AAA001
+	
+	@OneToOne
     @JoinColumn(name = "usuario_id", nullable = false)
     private Usuario usuario;
 

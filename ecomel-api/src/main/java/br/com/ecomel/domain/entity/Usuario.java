@@ -18,7 +18,7 @@ public class Usuario extends BaseAuditavel {
     @Column(nullable = false)
     private String nome;
 
-    @Column(nullable = false, unique = true)
+    @Column(unique = true) // Removido nullable=false
     private String email;
 
     @Column(nullable = false)
