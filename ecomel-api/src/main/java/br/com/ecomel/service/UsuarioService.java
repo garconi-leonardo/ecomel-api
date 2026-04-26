@@ -4,6 +4,8 @@ import br.com.ecomel.domain.entity.Carteira;
 import br.com.ecomel.domain.entity.Usuario;
 import br.com.ecomel.domain.enums.StatusUsuario;
 import br.com.ecomel.dto.request.UsuarioRequest;
+import br.com.ecomel.dto.response.CarteiraResponse;
+import br.com.ecomel.dto.response.UsuarioResponse;
 import br.com.ecomel.exception.BusinessException;
 import br.com.ecomel.repository.CarteiraRepository;
 import br.com.ecomel.repository.UsuarioRepository;
@@ -25,23 +27,33 @@ public class UsuarioService {
     private final CarteiraRepository carteiraRepository;
     private final GeradorCodigoCarteira geradorCodigo;
     private final PasswordEncoder passwordEncoder;
+    private final CarteiraService carteiraService; // Usado para pegar a resposta da carteira com cálculos
+
 
     @Transactional
-    public Usuario salvar(UsuarioRequest request) {
+    public UsuarioResponse salvar(UsuarioRequest request) {
+        // 1. Instância do usuário e criptografia de senha
         Usuario usuario = new Usuario();
         usuario.setNome(request.nome());
-        usuario.setEmail(request.email()); // Pode ser null
+        usuario.setEmail(request.email());
         usuario.setSenha(passwordEncoder.encode(request.senha()));
+        usuario.setStatus(StatusUsuario.ATIVO);
 
+        // 2. Geração do código AAA000 e vínculo da Carteira
         String novoCodigo = gerarNovoCodigoValido();
 
         Carteira carteira = new Carteira();
         carteira.setUsuario(usuario);
         carteira.setCodigoEndereco(novoCodigo);
-        
         usuario.setCarteira(carteira);
-        return usuarioRepository.save(usuario);
+
+        // 3. Persistência no banco de dados
+        Usuario salvo = usuarioRepository.save(usuario);
+
+        // 4. Retorno do DTO unificado (reutilizando a lógica de busca completa)
+        return buscarPorId(salvo.getId());
     }
+
 
 
     private String gerarNovoCodigoValido() {
@@ -77,20 +89,38 @@ public class UsuarioService {
     public void inativar(Long id) {
         Usuario usuario = usuarioRepository.findById(id)
                 .orElseThrow(() -> new BusinessException("Usuário não encontrado"));
-        Carteira carteira = usuario.getCarteira();
-
-        // REGRA CRÍTICA: Só inativa se estiver zerado
-        boolean possuiSaldoEcm = carteira.getSaldoBase().compareTo(BigDecimal.ZERO) > 0;
-        boolean possuiSaldoFavos = carteira.getSaldoFavos().compareTo(BigDecimal.ZERO) > 0;
-
-        if (possuiSaldoEcm || possuiSaldoFavos) {
-            throw new BusinessException("Não é possível inativar conta com saldo de ECM ou FAVOS ativo.");
+        
+        // Regra de saldo zerado (Acessando o objeto carteira diretamente da entidade)
+        if (usuario.getCarteira().getSaldoBase().compareTo(BigDecimal.ZERO) > 0 || 
+            usuario.getCarteira().getSaldoFavos().compareTo(BigDecimal.ZERO) > 0) {
+            throw new BusinessException("Conta possui ativos. Zere os saldos antes de desativar.");
         }
 
+        // Desativa ambos simultaneamente
         usuario.setAtivo(false);
         usuario.setStatus(StatusUsuario.BLOQUEADO);
+        usuario.getCarteira().setAtivo(false); // Desativa a carteira junto
+        
         usuario.setDesativadoEm(LocalDateTime.now());
         usuarioRepository.save(usuario);
+    }    
+    @Transactional(readOnly = true)
+    public UsuarioResponse buscarPorId(Long id) {
+        Usuario usuario = usuarioRepository.findById(id)
+                .orElseThrow(() -> new BusinessException("Usuário não encontrado"));
+        
+        // Buscamos a carteira através do service para garantir que saldos e dividendos venham calculados
+        CarteiraResponse carteiraResumo = carteiraService.obterExtratoPorUsuario(id);
+        
+        return new UsuarioResponse(
+            usuario.getId(),
+            usuario.getNome(),
+            usuario.getEmail(),
+            usuario.getCriadoEm(),
+            carteiraResumo
+        );
     }
+    
+
 
 }

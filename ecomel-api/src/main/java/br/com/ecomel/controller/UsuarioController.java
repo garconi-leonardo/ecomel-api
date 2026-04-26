@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 import br.com.ecomel.domain.entity.Usuario;
 import br.com.ecomel.dto.request.UsuarioRequest;
 import br.com.ecomel.dto.response.UsuarioResponse;
+import br.com.ecomel.service.CarteiraService;
 import br.com.ecomel.service.UsuarioService;
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
@@ -39,10 +40,12 @@ public class UsuarioController {
     }
     
     @PostMapping
-    @Operation(summary = "Cadastrar usuário")
+    @Operation(summary = "Cadastrar usuário", description = "Cria um usuário e sua carteira AAA000 vinculada")
     public ResponseEntity<UsuarioResponse> cadastrar(@RequestBody @Valid UsuarioRequest request) {
-        Usuario u = service.salvar(request);
-        UsuarioResponse body = new UsuarioResponse(u.getId(), u.getNome(), u.getEmail(), u.getCriadoEm());
-        return ResponseEntity.status(HttpStatus.CREATED).body(body);
+        // O service agora retorna o UsuarioResponse completo (com o objeto carteira dentro)
+        UsuarioResponse response = service.salvar(request);
+        
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
+
 }

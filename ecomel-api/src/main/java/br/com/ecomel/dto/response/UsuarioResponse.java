@@ -6,5 +6,6 @@ public record UsuarioResponse(
     Long id,
     String nome,
     String email,
-    LocalDateTime criadoEm
+    LocalDateTime criadoEm,
+    CarteiraResponse carteira // Referência direta ao objeto Carteira
 ) {}
