@@ -13,8 +13,9 @@ import java.math.BigDecimal;
 @Setter
 public class Carteira extends BaseAuditavel {
 
-    @Column(nullable = false, unique = true)
-    private Long usuarioId;
+    @OneToOne
+    @JoinColumn(name = "usuario_id", nullable = false)
+    private Usuario usuario;
 
     // Saldo base para cálculo da ECM
     @Column(nullable = false, precision = 20, scale = 18)
