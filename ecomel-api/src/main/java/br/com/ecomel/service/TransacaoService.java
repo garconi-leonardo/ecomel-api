@@ -44,5 +44,30 @@ public class TransacaoService {
         indiceRepository.save(indice);
         carteiraRepository.save(carteira);
     }
+    
+    @Transactional
+    public void processarSaque(Long usuarioId, BigDecimal valorSaqueReal) {
+        IndiceGlobal indice = indiceRepository.findFirstByAtivoTrue();
+        Carteira carteira = carteiraRepository.findByUsuarioId(usuarioId);
+
+        // 1. Validar se tem saldo real suficiente
+        BigDecimal saldoRealAtual = carteira.getSaldoReal(indice.getValor());
+        if (saldoRealAtual.compareTo(valorSaqueReal) < 0) {
+            throw new RuntimeException("Saldo insuficiente");
+        }
+
+        // 2. Atualizar Índice Global (Valorização por transação externa)
+        BigDecimal fatorCrescimento = BigDecimal.ONE.add(new BigDecimal("0.05"));
+        indice.setValor(indice.getValor().multiply(fatorCrescimento));
+
+        // 3. Converter o valor do saque (Real) para o que deve ser removido do Base
+        // quantidade_base = valor_saque_real / novo_indice
+        BigDecimal debitoBase = valorSaqueReal.divide(indice.getValor(), 18, RoundingMode.HALF_UP);
+        carteira.setSaldoBase(carteira.getSaldoBase().subtract(debitoBase));
+
+        indiceRepository.save(indice);
+        carteiraRepository.save(carteira);
+    }
+
 }
 
