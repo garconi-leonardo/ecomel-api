@@ -1,2 +1,13 @@
+# Configurações do Banco de Dados (Docker)
+spring.datasource.url=jdbc:postgresql://ecomel-db:5432/ecomel
+spring.datasource.username=user
+spring.datasource.password=password
+spring.datasource.driver-class-name=org.postgresql.Driver
+
+# Configurações de JWT (Originais)
 app.jwt.secret=MinhaChaveSuperSecretaComMaisDe64CaracteresParaGarantirASegurancaDoSistemaEcomel2024
 app.jwt.expiration=86400000
+
+# Hibernate / JPA
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.show-sql=true

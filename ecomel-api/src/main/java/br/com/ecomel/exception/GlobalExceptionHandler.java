@@ -1,5 +1,7 @@
 package br.com.ecomel.exception;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -13,9 +15,13 @@ import java.util.stream.Collectors;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    // Trata erros de lógica de negócio (ex: Saldo Insuficiente)
+    private static final Logger logger = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    // Trata erros de lógica de negócio
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ApiError> handleBusiness(BusinessException ex) {
+        logger.error("Erro de negócio: {}", ex.getMessage()); // Log de aviso
+        
         ApiError error = new ApiError(
             HttpStatus.BAD_REQUEST.value(),
             ex.getMessage(),
@@ -33,9 +39,11 @@ public class GlobalExceptionHandler {
                 .map(e -> e.getField() + ": " + e.getDefaultMessage())
                 .collect(Collectors.toList());
 
+        logger.error("Erro de validação: {}", errors);
+
         ApiError error = new ApiError(
             HttpStatus.UNPROCESSABLE_ENTITY.value(),
-            "Erro de validação nos campos",
+            "Erro de validação nos campos: " + ex.getMessage(), // getMessage() incluído aqui
             LocalDateTime.now(),
             errors
         );
@@ -45,9 +53,12 @@ public class GlobalExceptionHandler {
     // Trata erros genéricos (Runtime)
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiError> handleGeneral(Exception ex) {
+        // O segundo parâmetro 'ex' no logger.error imprime o Stack Trace completo no console
+        logger.error("Erro interno não esperado: ", ex); 
+
         ApiError error = new ApiError(
             HttpStatus.INTERNAL_SERVER_ERROR.value(),
-            "Ocorreu um erro interno inesperado",
+            "Erro interno: " + ex.getMessage(), // getMessage() incluído aqui
             LocalDateTime.now(),
             null
         );
