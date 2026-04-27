@@ -86,22 +86,27 @@ public class UsuarioService {
     public void editar(Long id, UsuarioRequest request) {
         Usuario usuario = usuarioRepository.findById(id)
                 .orElseThrow(() -> new BusinessException("Usuário não encontrado"));
-        
+
         usuario.setNome(request.nome());
-        
-        // 1. Validação lógica de e-mail único (se preenchido)
+
+        // 1. Validação lógica de e-mail único (se preenchido e se alterado)
         if (request.email() != null && !request.email().isBlank()) {
-            boolean emailJaExiste = usuarioRepository.existsByEmail(request.email());
+            // Verifica se existe alguém com esse e-mail QUE NÃO SEJA o usuário atual
+            boolean emailJaExiste = usuarioRepository.existsByEmailAndIdNot(request.email(), id);
             if (emailJaExiste) {
-                throw new RuntimeException("Este e-mail já está em uso.");
+                throw new RuntimeException("Este e-mail já está em uso por outro usuário.");
             }
         }
-        
+
         usuario.setEmail(request.email());
-        if (request.senha() != null) usuario.setSenha(passwordEncoder.encode(request.senha()));
         
+        if (request.senha() != null && !request.senha().isBlank()) {
+            usuario.setSenha(passwordEncoder.encode(request.senha()));
+        }
+
         usuarioRepository.save(usuario);
     }
+
 
     @Transactional
     public void inativar(Long id) {

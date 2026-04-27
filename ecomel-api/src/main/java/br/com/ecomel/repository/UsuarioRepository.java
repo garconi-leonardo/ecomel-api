@@ -18,4 +18,12 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
      * Verifica se já existe um e-mail cadastrado para evitar duplicidade.
      */
     boolean existsByEmail(String email);
+
+    /**
+     * Verifica se já existe um e-mail cadastrado para evitar duplicidade
+     *  sem levar em consideração o próprio objeto.
+     */
+    
+	boolean existsByEmailAndIdNot(String email, Long id);
+    
 }
