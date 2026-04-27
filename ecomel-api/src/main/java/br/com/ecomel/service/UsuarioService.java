@@ -32,14 +32,23 @@ public class UsuarioService {
 
     @Transactional
     public UsuarioResponse salvar(UsuarioRequest request) {
-        // 1. Instância do usuário e criptografia de senha
+        
+        // 1. Validação lógica de e-mail único (se preenchido)
+        if (request.email() != null && !request.email().isBlank()) {
+            boolean emailJaExiste = usuarioRepository.existsByEmail(request.email());
+            if (emailJaExiste) {
+                throw new RuntimeException("Este e-mail já está em uso.");
+            }
+        }
+    	
+    	// 2. Instância do usuário e criptografia de senha
         Usuario usuario = new Usuario();
         usuario.setNome(request.nome());
         usuario.setEmail(request.email());
         usuario.setSenha(passwordEncoder.encode(request.senha()));
         usuario.setStatus(StatusUsuario.ATIVO);
 
-        // 2. Geração do código AAA000 e vínculo da Carteira
+        // 3. Geração do código AAA000 e vínculo da Carteira
         String novoCodigo = gerarNovoCodigoValido();
 
         Carteira carteira = new Carteira();
@@ -47,10 +56,10 @@ public class UsuarioService {
         carteira.setCodigoEndereco(novoCodigo);
         usuario.setCarteira(carteira);
 
-        // 3. Persistência no banco de dados
+        // 4. Persistência no banco de dados
         Usuario salvo = usuarioRepository.save(usuario);
 
-        // 4. Retorno do DTO unificado (reutilizando a lógica de busca completa)
+        // 5. Retorno do DTO unificado (reutilizando a lógica de busca completa)
         return buscarPorId(salvo.getId());
     }
 
@@ -79,7 +88,16 @@ public class UsuarioService {
                 .orElseThrow(() -> new BusinessException("Usuário não encontrado"));
         
         usuario.setNome(request.nome());
-        if (request.email() != null) usuario.setEmail(request.email());
+        
+        // 1. Validação lógica de e-mail único (se preenchido)
+        if (request.email() != null && !request.email().isBlank()) {
+            boolean emailJaExiste = usuarioRepository.existsByEmail(request.email());
+            if (emailJaExiste) {
+                throw new RuntimeException("Este e-mail já está em uso.");
+            }
+        }
+        
+        usuario.setEmail(request.email());
         if (request.senha() != null) usuario.setSenha(passwordEncoder.encode(request.senha()));
         
         usuarioRepository.save(usuario);
