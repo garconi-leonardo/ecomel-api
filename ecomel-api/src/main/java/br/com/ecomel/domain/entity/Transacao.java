@@ -16,7 +16,7 @@ import java.math.BigDecimal;
 public class Transacao extends BaseAuditavel {
 
 
-	@Column(unique = true, length = 64)
+	@Column(length = 64)
 	private String requestKey; // UUID enviado pelo Front-end
     
     @ManyToOne(fetch = FetchType.LAZY)

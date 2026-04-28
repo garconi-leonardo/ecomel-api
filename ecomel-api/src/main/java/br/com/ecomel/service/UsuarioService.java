@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.time.LocalDateTime;
 
 @Service
@@ -65,7 +66,7 @@ public class UsuarioService {
         carteira.setUsuario(usuario);
         carteira.setCodigoEndereco(gerarNovoCodigoValido());
         carteira.setAtivo(true);
-        carteira.setSaldoBase(BigDecimal.ZERO);
+        carteira.setTokenEcomel(BigInteger.ZERO);
         carteira.setSaldoFavos(BigDecimal.ZERO);
         carteira.setCriadoEm(audit.data());
         carteira.setCriadoPor(audit.usuario());
@@ -105,7 +106,7 @@ public class UsuarioService {
         Usuario usuario = usuarioRepository.findById(id)
                 .orElseThrow(() -> new BusinessException("Usuário não encontrado"));
         
-        if (usuario.getCarteira().getSaldoBase().compareTo(BigDecimal.ZERO) > 0 || 
+        if (usuario.getCarteira().getTokenEcomel().compareTo(BigInteger.ZERO) > 0 || 
             usuario.getCarteira().getSaldoFavos().compareTo(BigDecimal.ZERO) > 0) {
             throw new BusinessException("Conta possui ativos. Zere os saldos antes de desativar.");
         }

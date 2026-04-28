@@ -1,9 +1,11 @@
 package br.com.ecomel.repository;
 
 import br.com.ecomel.domain.entity.Transacao;
+import br.com.ecomel.domain.enums.TipoTransacao;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 @Repository
@@ -19,10 +21,17 @@ public interface TransacaoRepository extends JpaRepository<Transacao, Long> {
      * Busca transações onde a carteira do usuário foi o destino (recebimento de transferência).
      */
     List<Transacao> findByCarteiraDestinoUsuarioIdOrderByCriadoEmDesc(Long usuarioId);
-    
+
     /**
-     * Verifica se uma transação com esta chave de idempotência já existe.
-     * Evita que a mesma operação seja processada duas vezes.
+     * Verifica se uma transação com esta combinação de
+     * (requestKey + tipo + valorBruto) já existe.
+     *
+     * Estratégia anti múltiplos cliques:
+     *  - Mesma chave + mesmo tipo + MESMO valor => duplicata (bloqueia).
+     *  - Mesma chave + mesmo tipo + valor DIFERENTE => operação legítima (libera).
+     *  - Mesma chave + tipo DIFERENTE => operação legítima (libera).
      */
-    boolean existsByRequestKey(String requestKey);
+    boolean existsByRequestKeyAndTipoAndValorBruto(String requestKey,
+                                                   TipoTransacao tipo,
+                                                   BigDecimal valorBruto);
 }

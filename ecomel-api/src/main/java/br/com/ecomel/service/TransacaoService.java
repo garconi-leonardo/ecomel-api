@@ -11,12 +11,14 @@ import br.com.ecomel.exception.BusinessException;
 import br.com.ecomel.repository.CarteiraRepository;
 import br.com.ecomel.repository.IndiceGlobalRepository;
 import br.com.ecomel.repository.TransacaoRepository;
+import br.com.ecomel.util.CalculoFinanceiroUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j; // Import para logs
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.math.RoundingMode;
 import java.util.List;
 
@@ -33,7 +35,7 @@ public class TransacaoService {
     @Transactional
     public void processarDeposito(Long usuarioId, BigDecimal valorReal, String requestKey) {
         try {
-            verificarIdempotencia(requestKey);
+            verificarIdempotencia(requestKey, TipoTransacao.DEPOSITO, valorReal);
 
             IndiceGlobal indice = indiceRepository.findFirstByAtivoTrue();
             Carteira carteira = carteiraRepository.findByUsuarioId(usuarioId);
@@ -45,7 +47,8 @@ public class TransacaoService {
             indice.setValor(indice.getValor().multiply(fatorCrescimento).setScale(18, RoundingMode.DOWN));
 
             BigDecimal incrementoBase = valorLiquidoReal.divide(indice.getValor(), 18, RoundingMode.DOWN);
-            carteira.setSaldoBase(carteira.getSaldoBase().add(incrementoBase));
+            BigInteger incrementoToken = CalculoFinanceiroUtils.toTokenEcomel(incrementoBase);
+            carteira.setTokenEcomel(carteira.getTokenEcomel().add(incrementoToken));
 
             BigDecimal montanteFavosBase = valorReal.multiply(new BigDecimal("0.0401"))
                                                    .divide(indice.getValor(), 18, RoundingMode.DOWN);
@@ -66,7 +69,7 @@ public class TransacaoService {
     @Transactional
     public void processarSaque(Long usuarioId, BigDecimal valorSaqueReal, String requestKey) {
         try {
-            verificarIdempotencia(requestKey);
+            verificarIdempotencia(requestKey, TipoTransacao.SAQUE, valorSaqueReal);
 
             IndiceGlobal indice = indiceRepository.findFirstByAtivoTrue();
             Carteira carteira = carteiraRepository.findByUsuarioId(usuarioId);
@@ -81,7 +84,9 @@ public class TransacaoService {
             indice.setValor(indice.getValor().multiply(fatorCrescimento).setScale(18, RoundingMode.DOWN));
 
             BigDecimal debitoBase = valorSaqueReal.divide(indice.getValor(), 18, RoundingMode.DOWN);
-            carteira.setSaldoBase(carteira.getSaldoBase().subtract(debitoBase));
+            // Debita em tokens inteiros (arredonda para menos para nunca debitar a menos do que devido)
+            BigInteger debitoToken = CalculoFinanceiroUtils.toTokenEcomel(debitoBase);
+            carteira.setTokenEcomel(carteira.getTokenEcomel().subtract(debitoToken));
 
             BigDecimal montanteFavosBase = valorSaqueReal.multiply(new BigDecimal("0.0401"))
                                                    .divide(indice.getValor(), 18, RoundingMode.DOWN);
@@ -102,7 +107,7 @@ public class TransacaoService {
     @Transactional
     public void transferirInterno(TransferenciaRequest request, String requestKey) {
         try {
-            verificarIdempotencia(requestKey);
+            verificarIdempotencia(requestKey, TipoTransacao.TRANSFERENCIA_INTERNA, request.valorReal());
 
             IndiceGlobal indice = indiceRepository.findFirstByAtivoTrue();
             Carteira origem = carteiraRepository.findByUsuarioId(request.usuarioOrigemId());
@@ -110,13 +115,14 @@ public class TransacaoService {
                     .orElseThrow(() -> new BusinessException("Carteira destino não encontrada."));
 
             BigDecimal valorBase = request.valorReal().divide(indice.getValor(), 18, RoundingMode.DOWN);
+            BigInteger valorToken = CalculoFinanceiroUtils.toTokenEcomel(valorBase);
 
-            if (origem.getSaldoBase().compareTo(valorBase) < 0) {
+            if (origem.getTokenEcomel().compareTo(valorToken) < 0) {
                 throw new BusinessException("Saldo insuficiente para transferência.");
             }
 
-            origem.setSaldoBase(origem.getSaldoBase().subtract(valorBase));
-            destino.setSaldoBase(destino.getSaldoBase().add(valorBase));
+            origem.setTokenEcomel(origem.getTokenEcomel().subtract(valorToken));
+            destino.setTokenEcomel(destino.getTokenEcomel().add(valorToken));
 
             salvarTransacaoInterna(origem, destino, request.valorReal(), requestKey);
 
@@ -152,10 +158,22 @@ public class TransacaoService {
         }
     }
 
-    private void verificarIdempotencia(String requestKey) {
-        if (requestKey != null && transacaoRepository.existsByRequestKey(requestKey)) {
-            log.warn("Tentativa de duplicidade detectada para RequestKey: {}", requestKey);
-            throw new BusinessException("Transação já processada (RequestKey duplicada).");
+    /**
+     * Garante idempotência por (requestKey + tipoTransacao + valorBruto).
+     *
+     * Objetivo: impedir que múltiplos cliques no mesmo botão criem duplicatas,
+     * mas SEM bloquear operações sequenciais legítimas:
+     *  - Depósito de R$500 + Saque de R$200 (tipos diferentes) => OK
+     *  - Saque de R$100 + Saque de R$200 (mesmo tipo, valores diferentes) => OK
+     *  - Depósito de R$500 + Depósito de R$500 com mesma chave => BLOQUEADO (duplo clique)
+     */
+    private void verificarIdempotencia(String requestKey, TipoTransacao tipo, BigDecimal valor) {
+        if (requestKey != null
+                && transacaoRepository.existsByRequestKeyAndTipoAndValorBruto(requestKey, tipo, valor)) {
+            log.warn("Duplicidade detectada (múltiplos cliques) - RequestKey: {} | Tipo: {} | Valor: {}",
+                    requestKey, tipo, valor);
+            throw new BusinessException(
+                    "Transação já processada (operação idêntica detectada — possível múltiplo clique).");
         }
     }
 

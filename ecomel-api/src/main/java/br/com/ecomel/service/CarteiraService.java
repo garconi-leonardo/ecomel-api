@@ -8,10 +8,12 @@ import br.com.ecomel.repository.IndiceGlobalRepository;
 import br.com.ecomel.repository.OrdemFavoRepository;
 import br.com.ecomel.domain.enums.StatusOrdem;
 import br.com.ecomel.domain.enums.TipoOrdem;
+import br.com.ecomel.util.CalculoFinanceiroUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.math.RoundingMode;
 
 @Service
@@ -43,7 +45,7 @@ public class CarteiraService {
 
         return new CarteiraResponse(
             carteira.getCodigoEndereco(),
-            carteira.getSaldoBase(),
+            carteira.getTokenEcomel(),
             carteira.getSaldoReal(indice.getValor()),
             carteira.getSaldoFavos(),
             favosEmOrdem != null ? favosEmOrdem : BigDecimal.ZERO,
@@ -55,6 +57,7 @@ public class CarteiraService {
     /**
      * Calcula e credita dividendos de ECM baseados na posse de FAVOS.
      * Fórmula: Lucro = (IndiceGlobalFavo - UltimoIndiceUsuario) * SaldoFavosUsuario
+     * Os dividendos creditados em tokenEcomel são SEMPRE arredondados para menos.
      */
     private void sincronizarDividendos(Carteira carteira, IndiceGlobal indiceGlobal) {
         BigDecimal indiceAtual = indiceGlobal.getIndiceFavoAcumulado();
@@ -63,10 +66,11 @@ public class CarteiraService {
         if (indiceAtual.compareTo(ultimoIndiceUsuario) > 0 && carteira.getSaldoFavos().compareTo(BigDecimal.ZERO) > 0) {
             BigDecimal diferencaIndice = indiceAtual.subtract(ultimoIndiceUsuario);
             BigDecimal dividendosEcm = carteira.getSaldoFavos().multiply(diferencaIndice)
-                                               .setScale(18, RoundingMode.HALF_UP);
+                                               .setScale(18, RoundingMode.DOWN);
 
-            // Credita os dividendos diretamente no Saldo Base (ECM)
-            carteira.setSaldoBase(carteira.getSaldoBase().add(dividendosEcm));
+            // Credita os dividendos no tokenEcomel (truncado, sempre inteiro pra menos)
+            BigInteger dividendosToken = CalculoFinanceiroUtils.toTokenEcomel(dividendosEcm);
+            carteira.setTokenEcomel(carteira.getTokenEcomel().add(dividendosToken));
         }
         
         // Atualiza o marco temporal do usuário para o índice atual do sistema
