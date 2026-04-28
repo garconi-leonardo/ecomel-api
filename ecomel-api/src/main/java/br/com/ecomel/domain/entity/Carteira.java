@@ -21,14 +21,14 @@ public class Carteira extends BaseAuditavel {
     private Usuario usuario;
 
     // Saldo base para cálculo da ECM
-    @Column(nullable = false, precision = 20, scale = 18)
+    @Column(nullable = false, precision = 38, scale = 18)
     private BigDecimal saldoBase = BigDecimal.ZERO;
 
     // Saldo de FAVOS (Ativo negociável)
     @Column(nullable = false, precision = 20, scale = 8)
     private BigDecimal saldoFavos = BigDecimal.ZERO;
     
-    @Column(nullable = false, precision = 20, scale = 18)
+    @Column(nullable = false, precision = 38, scale = 18)
     private BigDecimal ultimoIndiceFavo = BigDecimal.ZERO;
 
     /**

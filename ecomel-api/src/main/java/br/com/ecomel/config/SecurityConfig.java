@@ -62,15 +62,8 @@ public class SecurityConfig {
                     "/webjars/**",
                     "/swagger-resources/**"
                 ).permitAll()
-                
-                // 3. Autenticação e Cadastro
-                .requestMatchers("/api/v1/auth/**").permitAll()
-                .requestMatchers(HttpMethod.POST, "/api/v1/usuarios").permitAll()
-                
-                // 4. Endpoints de teste
-                .requestMatchers("/api/v1/usuarios/**").permitAll()
-                .requestMatchers("/api/v1/carteiras/**").permitAll()
-                
+
+                .requestMatchers("/api/v1/**").permitAll()
                 .anyRequest().authenticated()
             );
 

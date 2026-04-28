@@ -23,7 +23,7 @@ public class OrdemFavo extends BaseAuditavel {
     private BigDecimal quantidadeOriginal;
     private BigDecimal quantidadeRestante;
     
-    @Column(precision = 20, scale = 18)
+    @Column(precision = 38, scale = 18)
     private BigDecimal precoUnitario; // Preço em ECM por 1 FAVO
 
     @Enumerated(EnumType.STRING)

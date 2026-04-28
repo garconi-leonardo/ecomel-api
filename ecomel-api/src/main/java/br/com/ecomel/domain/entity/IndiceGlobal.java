@@ -17,10 +17,10 @@ import java.math.BigDecimal;
 @NoArgsConstructor
 public class IndiceGlobal extends BaseAuditavel {
 
-    @Column(nullable = false, precision = 20, scale = 18)
+    @Column(nullable = false, precision = 38, scale = 18)
     private BigDecimal valor = BigDecimal.ONE;
 
     // Novo campo para o Índice de Distribuição de Favos
-    @Column(nullable = false, precision = 20, scale = 18)
+    @Column(nullable = false, precision = 38, scale = 18)
     private BigDecimal indiceFavoAcumulado = BigDecimal.ZERO;
 }

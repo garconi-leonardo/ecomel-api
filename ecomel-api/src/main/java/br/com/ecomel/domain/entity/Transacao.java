@@ -31,13 +31,13 @@ public class Transacao extends BaseAuditavel {
     @Column(nullable = false)
     private TipoTransacao tipo;
 
-    @Column(nullable = false, precision = 20, scale = 18)
+    @Column(nullable = false, precision = 38, scale = 18)
     private BigDecimal valorBruto;
 
-    @Column(nullable = false, precision = 20, scale = 18)
+    @Column(nullable = false, precision = 38, scale = 18)
     private BigDecimal valorLiquido;
 
-    @Column(nullable = false, precision = 20, scale = 18)
+    @Column(nullable = false, precision = 38, scale = 18)
     private BigDecimal taxaTotal;
 
     @Enumerated(EnumType.STRING)

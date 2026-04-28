@@ -13,9 +13,9 @@ import java.math.BigDecimal;
 @Getter @Setter
 public class DistribuicaoFavos extends BaseAuditavel {
     
-    @Column(nullable = false, precision = 20, scale = 18)
+    @Column(nullable = false, precision = 38, scale = 18)
     private BigDecimal montanteEcmTotal; // Valor total em ECM distribuído nesta rodada
     
-    @Column(nullable = false, precision = 20, scale = 18)
+    @Column(nullable = false, precision = 38, scale = 18)
     private BigDecimal ecmPorFavo; // Quanto cada 1.00000000 FAVO recebeu
 }
