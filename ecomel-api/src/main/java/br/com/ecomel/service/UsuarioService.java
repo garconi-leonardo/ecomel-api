@@ -11,13 +11,13 @@ import br.com.ecomel.repository.CarteiraRepository;
 import br.com.ecomel.repository.UsuarioRepository;
 import br.com.ecomel.util.GeradorCodigoCarteira;
 import lombok.RequiredArgsConstructor;
-
-import java.math.BigDecimal;
-import java.time.LocalDateTime;
-
+import org.springframework.data.domain.AuditorAware;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 @Service
 @RequiredArgsConstructor
@@ -27,78 +27,71 @@ public class UsuarioService {
     private final CarteiraRepository carteiraRepository;
     private final GeradorCodigoCarteira geradorCodigo;
     private final PasswordEncoder passwordEncoder;
-    private final CarteiraService carteiraService; // Usado para pegar a resposta da carteira com cálculos
+    private final CarteiraService carteiraService;
+    private final AuditorAware<String> auditorProvider;
 
+    /**
+     * Encapsula os dados de auditoria atuais.
+     */
+    private record AuditContext(LocalDateTime data, String usuario) {}
+
+    private AuditContext getAuditContext() {
+        return new AuditContext(
+            LocalDateTime.now(), 
+            auditorProvider.getCurrentAuditor().orElse("ECOMEL")
+        );
+    }
 
     @Transactional
     public UsuarioResponse salvar(UsuarioRequest request) {
-        
-        // 1. Validação lógica de e-mail único (se preenchido)
         if (request.email() != null && !request.email().isBlank()) {
-            boolean emailJaExiste = usuarioRepository.existsByEmail(request.email());
-            if (emailJaExiste) {
-                throw new RuntimeException("Este e-mail já está em uso.");
+            if (usuarioRepository.existsByEmail(request.email())) {
+                throw new BusinessException("Este e-mail já está em uso.");
             }
         }
-    	
-    	// 2. Instância do usuário e criptografia de senha
+
+        AuditContext audit = getAuditContext();
+
         Usuario usuario = new Usuario();
         usuario.setNome(request.nome());
         usuario.setEmail(request.email());
         usuario.setSenha(passwordEncoder.encode(request.senha()));
         usuario.setStatus(StatusUsuario.ATIVO);
-
-        // 3. Geração do código AAA000 e vínculo da Carteira
-        String novoCodigo = gerarNovoCodigoValido();
+        usuario.setAtivo(true);
+        usuario.setCriadoEm(audit.data());
+        usuario.setCriadoPor(audit.usuario());
 
         Carteira carteira = new Carteira();
         carteira.setUsuario(usuario);
-        carteira.setCodigoEndereco(novoCodigo);
+        carteira.setCodigoEndereco(gerarNovoCodigoValido());
+        carteira.setAtivo(true);
+        carteira.setSaldoBase(BigDecimal.ZERO);
+        carteira.setSaldoFavos(BigDecimal.ZERO);
+        carteira.setCriadoEm(audit.data());
+        carteira.setCriadoPor(audit.usuario());
+        
         usuario.setCarteira(carteira);
 
-        // 4. Persistência no banco de dados
         Usuario salvo = usuarioRepository.save(usuario);
-
-        // 5. Retorno do DTO unificado (reutilizando a lógica de busca completa)
         return buscarPorId(salvo.getId());
     }
 
-
-
-    private String gerarNovoCodigoValido() {
-        // 1. Busca o maior código alfanumérico atual (ex: "AAA010")
-        String ultimo = carteiraRepository.findMaxCodigoEndereco();
-        
-        // 2. O utilitário incrementa para o próximo candidato (ex: "AAA011")
-        String candidato = geradorCodigo.incrementar(ultimo);
-
-        // 3. ESTA É A VERIFICAÇÃO:
-        // Ele consulta o banco. Se o código "AAA011" já existir por algum motivo,
-        // ele entra no loop e pula para o "AAA012", e assim por diante.
-        while (carteiraRepository.existsByCodigoEndereco(candidato)) {
-            candidato = geradorCodigo.incrementar(candidato);
-        }
-        
-        return candidato; // Só retorna um código que o banco confirmou não existir
-    }
-    
     @Transactional
     public void editar(Long id, UsuarioRequest request) {
         Usuario usuario = usuarioRepository.findById(id)
                 .orElseThrow(() -> new BusinessException("Usuário não encontrado"));
 
-        usuario.setNome(request.nome());
-
-        // 1. Validação lógica de e-mail único (se preenchido e se alterado)
         if (request.email() != null && !request.email().isBlank()) {
-            // Verifica se existe alguém com esse e-mail QUE NÃO SEJA o usuário atual
-            boolean emailJaExiste = usuarioRepository.existsByEmailAndIdNot(request.email(), id);
-            if (emailJaExiste) {
-                throw new RuntimeException("Este e-mail já está em uso por outro usuário.");
+            if (usuarioRepository.existsByEmailAndIdNot(request.email(), id)) {
+                throw new BusinessException("Este e-mail já está em uso por outro usuário.");
             }
         }
 
+        AuditContext audit = getAuditContext();
+        usuario.setNome(request.nome());
         usuario.setEmail(request.email());
+        usuario.setAtualizadoEm(audit.data());
+        usuario.setAtualizadoPor(audit.usuario());
         
         if (request.senha() != null && !request.senha().isBlank()) {
             usuario.setSenha(passwordEncoder.encode(request.senha()));
@@ -107,32 +100,37 @@ public class UsuarioService {
         usuarioRepository.save(usuario);
     }
 
-
     @Transactional
     public void inativar(Long id) {
         Usuario usuario = usuarioRepository.findById(id)
                 .orElseThrow(() -> new BusinessException("Usuário não encontrado"));
         
-        // Regra de saldo zerado (Acessando o objeto carteira diretamente da entidade)
         if (usuario.getCarteira().getSaldoBase().compareTo(BigDecimal.ZERO) > 0 || 
             usuario.getCarteira().getSaldoFavos().compareTo(BigDecimal.ZERO) > 0) {
             throw new BusinessException("Conta possui ativos. Zere os saldos antes de desativar.");
         }
 
-        // Desativa ambos simultaneamente
+        AuditContext audit = getAuditContext();
         usuario.setAtivo(false);
         usuario.setStatus(StatusUsuario.BLOQUEADO);
-        usuario.getCarteira().setAtivo(false); // Desativa a carteira junto
+        usuario.setDesativadoEm(audit.data());
+        usuario.setDesativadoPor(audit.usuario());
         
-        usuario.setDesativadoEm(LocalDateTime.now());
+        if (usuario.getCarteira() != null) {
+            usuario.getCarteira().setAtivo(false);
+            usuario.getCarteira().setDesativadoEm(audit.data());
+            usuario.getCarteira().setDesativadoPor(audit.usuario());
+        }
+
         usuarioRepository.save(usuario);
-    }    
+    }
+
     @Transactional(readOnly = true)
     public UsuarioResponse buscarPorId(Long id) {
-        Usuario usuario = usuarioRepository.findById(id)
+        // Nome do método ajustado para coincidir com o Repository discutido anteriormente
+        Usuario usuario = usuarioRepository.findByPorId(id, StatusUsuario.ATIVO)
                 .orElseThrow(() -> new BusinessException("Usuário não encontrado"));
         
-        // Buscamos a carteira através do service para garantir que saldos e dividendos venham calculados
         CarteiraResponse carteiraResumo = carteiraService.obterExtratoPorUsuario(id);
         
         return new UsuarioResponse(
@@ -143,7 +141,14 @@ public class UsuarioService {
             carteiraResumo
         );
     }
-    
 
+    private String gerarNovoCodigoValido() {
+        String ultimo = carteiraRepository.findMaxCodigoEndereco();
+        String candidato = geradorCodigo.incrementar(ultimo);
 
+        while (carteiraRepository.existsByCodigoEndereco(candidato)) {
+            candidato = geradorCodigo.incrementar(candidato);
+        }
+        return candidato;
+    }
 }

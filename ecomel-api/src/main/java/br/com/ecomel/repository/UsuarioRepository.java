@@ -1,7 +1,11 @@
 package br.com.ecomel.repository;
 
 import br.com.ecomel.domain.entity.Usuario;
+import br.com.ecomel.domain.enums.StatusUsuario;
+
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
@@ -25,5 +29,29 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
      */
     
 	boolean existsByEmailAndIdNot(String email, Long id);
+	
+	/*
+	 * Busca o usuário pelo e-mail ou pedo codigo da carteira
+	 */	
+	@Query("SELECT u FROM Usuario u " +
+	        "JOIN FETCH u.carteira c " +
+	        "WHERE (u.email = :login OR c.codigoEndereco = :login) " +
+	        "AND u.status = :statusAtivo") 
+	Optional<Usuario> findByEmailOuCodigoCarteira(
+	    @Param("login") String login, 
+	    @Param("statusAtivo") StatusUsuario statusAtivo
+	);
+
+    /*
+     * Busca o usuario por id 
+     */    
+    @Query("SELECT u FROM Usuario u " +
+            "JOIN FETCH u.carteira c " +
+            "WHERE u.id = :id " +
+            "AND u.status = :statusAtivo")
+    Optional<Usuario> findByPorId(
+        @Param("id") Long id, 
+        @Param("statusAtivo") StatusUsuario statusAtivo
+    );
     
 }

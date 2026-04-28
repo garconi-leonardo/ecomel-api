@@ -8,6 +8,12 @@ spring.datasource.driver-class-name=org.postgresql.Driver
 app.jwt.secret=MinhaChaveSuperSecretaComMaisDe64CaracteresParaGarantirASegurancaDoSistemaEcomel2024
 app.jwt.expiration=86400000
 
+user.ecomel=ECOMEL
+
 # Hibernate / JPA
 spring.jpa.hibernate.ddl-auto=update
 spring.jpa.show-sql=true
+
+logging.level.org.springframework.web=DEBUG
+logging.level.org.springframework.security=DEBUG
+server.error.include-message=always

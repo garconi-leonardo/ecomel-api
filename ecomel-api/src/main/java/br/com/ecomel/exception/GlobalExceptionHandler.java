@@ -7,9 +7,13 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
+
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @RestControllerAdvice
@@ -64,4 +68,17 @@ public class GlobalExceptionHandler {
         );
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
     }
+
+
+	 @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+	 public ResponseEntity<Map<String, Object>> handleMethodNotSupported(HttpRequestMethodNotSupportedException ex) {
+	     Map<String, Object> body = new HashMap<>();
+	     body.put("timestamp", LocalDateTime.now());
+	     body.put("status", HttpStatus.METHOD_NOT_ALLOWED.value());
+	     body.put("error", "Método HTTP não suportado");
+	     body.put("message", ex.getMessage());
+	     
+	     return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).body(body);
+	 }
+
 }

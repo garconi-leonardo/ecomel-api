@@ -3,6 +3,7 @@ package br.com.ecomel.controller;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -27,9 +28,12 @@ public class UsuarioController {
     private final UsuarioService service;
 
     @PutMapping("/{id}")
+    @Operation(summary = "Editar Usuário", description = "Editar o perfil do usuário")
     public ResponseEntity<Void> editar(@PathVariable Long id, @RequestBody @Valid UsuarioRequest request) {
         service.editar(id, request);
-        return ResponseEntity.ok().build();
+        // Retornar explicitamente No Content evita que o Spring tente redirecionar para qualquer lugar
+        return ResponseEntity.noContent().build();
+       // return ResponseEntity.ok().build();
     }
 
     @DeleteMapping("/{id}")
@@ -47,5 +51,13 @@ public class UsuarioController {
         
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
+    
+    @GetMapping("/{id}/completo")
+    @Operation(summary = "Buscar usuário", description = "Retorna os informações do usuário e da Carteira")
+    public ResponseEntity<UsuarioResponse> buscar(@PathVariable Long id) {
+        UsuarioResponse response = service.buscarPorId(id);
+        return ResponseEntity.ok(response);
+    }
+
 
 }
