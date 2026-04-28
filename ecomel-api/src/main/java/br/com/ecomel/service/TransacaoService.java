@@ -11,12 +11,14 @@ import br.com.ecomel.exception.BusinessException;
 import br.com.ecomel.repository.CarteiraRepository;
 import br.com.ecomel.repository.IndiceGlobalRepository;
 import br.com.ecomel.repository.TransacaoRepository;
+import br.com.ecomel.util.CalculoFinanceiroUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j; // Import para logs
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.math.RoundingMode;
 import java.util.List;
 
@@ -45,7 +47,8 @@ public class TransacaoService {
             indice.setValor(indice.getValor().multiply(fatorCrescimento).setScale(18, RoundingMode.DOWN));
 
             BigDecimal incrementoBase = valorLiquidoReal.divide(indice.getValor(), 18, RoundingMode.DOWN);
-            carteira.setSaldoBase(carteira.getSaldoBase().add(incrementoBase));
+            BigInteger incrementoToken = CalculoFinanceiroUtils.toTokenEcomel(incrementoBase);
+            carteira.setTokenEcomel(carteira.getTokenEcomel().add(incrementoToken));
 
             BigDecimal montanteFavosBase = valorReal.multiply(new BigDecimal("0.0401"))
                                                    .divide(indice.getValor(), 18, RoundingMode.DOWN);
@@ -81,7 +84,9 @@ public class TransacaoService {
             indice.setValor(indice.getValor().multiply(fatorCrescimento).setScale(18, RoundingMode.DOWN));
 
             BigDecimal debitoBase = valorSaqueReal.divide(indice.getValor(), 18, RoundingMode.DOWN);
-            carteira.setSaldoBase(carteira.getSaldoBase().subtract(debitoBase));
+            // Debita em tokens inteiros (arredonda para menos para nunca debitar a menos do que devido)
+            BigInteger debitoToken = CalculoFinanceiroUtils.toTokenEcomel(debitoBase);
+            carteira.setTokenEcomel(carteira.getTokenEcomel().subtract(debitoToken));
 
             BigDecimal montanteFavosBase = valorSaqueReal.multiply(new BigDecimal("0.0401"))
                                                    .divide(indice.getValor(), 18, RoundingMode.DOWN);
@@ -110,13 +115,14 @@ public class TransacaoService {
                     .orElseThrow(() -> new BusinessException("Carteira destino não encontrada."));
 
             BigDecimal valorBase = request.valorReal().divide(indice.getValor(), 18, RoundingMode.DOWN);
+            BigInteger valorToken = CalculoFinanceiroUtils.toTokenEcomel(valorBase);
 
-            if (origem.getSaldoBase().compareTo(valorBase) < 0) {
+            if (origem.getTokenEcomel().compareTo(valorToken) < 0) {
                 throw new BusinessException("Saldo insuficiente para transferência.");
             }
 
-            origem.setSaldoBase(origem.getSaldoBase().subtract(valorBase));
-            destino.setSaldoBase(destino.getSaldoBase().add(valorBase));
+            origem.setTokenEcomel(origem.getTokenEcomel().subtract(valorToken));
+            destino.setTokenEcomel(destino.getTokenEcomel().add(valorToken));
 
             salvarTransacaoInterna(origem, destino, request.valorReal(), requestKey);
 

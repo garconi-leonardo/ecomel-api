@@ -6,10 +6,12 @@ import br.com.ecomel.domain.enums.StatusOrdem;
 import br.com.ecomel.domain.enums.TipoOrdem;
 import br.com.ecomel.repository.CarteiraRepository;
 import br.com.ecomel.repository.OrdemFavoRepository;
+import br.com.ecomel.util.CalculoFinanceiroUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.util.List;
 
 @Service
@@ -57,13 +59,15 @@ public class MatchingEngineService {
         // 1. Entrega FAVOS ao comprador
         comprador.setSaldoFavos(comprador.getSaldoFavos().add(qtd));
         
-        // 2. Entrega ECM ao vendedor
-        vendedor.setSaldoBase(vendedor.getSaldoBase().add(ecm));
+        // 2. Entrega ECM ao vendedor (em tokens inteiros, sempre arredondado pra menos)
+        BigInteger ecmTokens = CalculoFinanceiroUtils.toTokenEcomel(ecm);
+        vendedor.setTokenEcomel(vendedor.getTokenEcomel().add(ecmTokens));
 
         // 3. Se o comprador pagou MAIS BARATO do que reservou originalmente (Sobra de ECM)
         if (nova.getTipo() == TipoOrdem.COMPRA && nova.getPrecoUnitario().compareTo(aberta.getPrecoUnitario()) > 0) {
              BigDecimal estornoEcm = qtd.multiply(nova.getPrecoUnitario().subtract(aberta.getPrecoUnitario()));
-             comprador.setSaldoBase(comprador.getSaldoBase().add(estornoEcm));
+             BigInteger estornoTokens = CalculoFinanceiroUtils.toTokenEcomel(estornoEcm);
+             comprador.setTokenEcomel(comprador.getTokenEcomel().add(estornoTokens));
         }
 
         carteiraRepository.save(comprador);

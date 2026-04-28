@@ -8,10 +8,12 @@ import br.com.ecomel.dto.request.OrdemFavoRequest;
 import br.com.ecomel.exception.BusinessException;
 import br.com.ecomel.repository.CarteiraRepository;
 import br.com.ecomel.repository.OrdemFavoRepository;
+import br.com.ecomel.util.CalculoFinanceiroUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.math.RoundingMode;
 
 @Service
@@ -34,12 +36,13 @@ public class OrdemFavoService {
             // Retira do disponível (fica 'preso' na ordem)
             carteira.setSaldoFavos(carteira.getSaldoFavos().subtract(request.quantidade()));
         } else {
-            // Compra: Reserva ECM (Base). Valor = Qtd * Preço
+            // Compra: Reserva ECM (Tokens). Valor = Qtd * Preço (sempre inteiro pra menos)
             BigDecimal valorNecessarioEcm = request.quantidade().multiply(request.precoUnitario());
-            if (carteira.getSaldoBase().compareTo(valorNecessarioEcm) < 0) {
+            BigInteger valorNecessarioToken = CalculoFinanceiroUtils.toTokenEcomel(valorNecessarioEcm);
+            if (carteira.getTokenEcomel().compareTo(valorNecessarioToken) < 0) {
                 throw new BusinessException("Saldo ECM insuficiente para compra.");
             }
-            carteira.setSaldoBase(carteira.getSaldoBase().subtract(valorNecessarioEcm));
+            carteira.setTokenEcomel(carteira.getTokenEcomel().subtract(valorNecessarioToken));
         }
 
         // 2. Criar Entidade
@@ -82,7 +85,8 @@ public class OrdemFavoService {
         } else {
             // Devolve o montante em ECM (Quantidade * Preço) que ainda não foi usado
             BigDecimal valorDevolucaoEcm = ordem.getQuantidadeRestante().multiply(ordem.getPrecoUnitario());
-            carteira.setSaldoBase(carteira.getSaldoBase().add(valorDevolucaoEcm));
+            BigInteger valorDevolucaoToken = CalculoFinanceiroUtils.toTokenEcomel(valorDevolucaoEcm);
+            carteira.setTokenEcomel(carteira.getTokenEcomel().add(valorDevolucaoToken));
         }
 
         // 4. Atualizar Status

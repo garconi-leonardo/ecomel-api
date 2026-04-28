@@ -6,6 +6,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 
 @Entity
 @Table(name = "carteiras")
@@ -15,27 +16,31 @@ public class Carteira extends BaseAuditavel {
 
     @Column(nullable = false, unique = true, length = 20)
     private String codigoEndereco; // Identificador AAA001
-	
-	@OneToOne
+
+    @OneToOne
     @JoinColumn(name = "usuario_id", nullable = false)
     private Usuario usuario;
 
-    // Saldo base para cálculo da ECM
-    @Column(nullable = false, precision = 38, scale = 18)
-    private BigDecimal saldoBase = BigDecimal.ZERO;
+    /**
+     * Quantidade de tokens ECOMEL da carteira.
+     * SEMPRE inteiro, com arredondamento para menos em qualquer conversão.
+     * Substitui o antigo "saldoBase".
+     */
+    @Column(name = "token_ecomel", nullable = false, precision = 38, scale = 0)
+    private BigInteger tokenEcomel = BigInteger.ZERO;
 
     // Saldo de FAVOS (Ativo negociável)
     @Column(nullable = false, precision = 20, scale = 8)
     private BigDecimal saldoFavos = BigDecimal.ZERO;
-    
+
     @Column(nullable = false, precision = 38, scale = 18)
     private BigDecimal ultimoIndiceFavo = BigDecimal.ZERO;
 
     /**
-     * Calcula o saldo real em ECM.
-     * saldoReal = saldoBase * indiceGlobal
+     * Calcula o saldo real (valorizado) em ECM.
+     * saldoReal = tokenEcomel * indiceGlobal
      */
     public BigDecimal getSaldoReal(BigDecimal valorIndiceGlobal) {
-        return this.saldoBase.multiply(valorIndiceGlobal);
+        return new BigDecimal(this.tokenEcomel).multiply(valorIndiceGlobal);
     }
 }
