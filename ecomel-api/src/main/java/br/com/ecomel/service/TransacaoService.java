@@ -33,7 +33,7 @@ public class TransacaoService {
     @Transactional
     public void processarDeposito(Long usuarioId, BigDecimal valorReal, String requestKey) {
         try {
-            verificarIdempotencia(requestKey, TipoTransacao.DEPOSITO);
+            verificarIdempotencia(requestKey, TipoTransacao.DEPOSITO, valorReal);
 
             IndiceGlobal indice = indiceRepository.findFirstByAtivoTrue();
             Carteira carteira = carteiraRepository.findByUsuarioId(usuarioId);
@@ -66,7 +66,7 @@ public class TransacaoService {
     @Transactional
     public void processarSaque(Long usuarioId, BigDecimal valorSaqueReal, String requestKey) {
         try {
-            verificarIdempotencia(requestKey, TipoTransacao.SAQUE);
+            verificarIdempotencia(requestKey, TipoTransacao.SAQUE, valorSaqueReal);
 
             IndiceGlobal indice = indiceRepository.findFirstByAtivoTrue();
             Carteira carteira = carteiraRepository.findByUsuarioId(usuarioId);
@@ -102,7 +102,7 @@ public class TransacaoService {
     @Transactional
     public void transferirInterno(TransferenciaRequest request, String requestKey) {
         try {
-            verificarIdempotencia(requestKey, TipoTransacao.TRANSFERENCIA_INTERNA);
+            verificarIdempotencia(requestKey, TipoTransacao.TRANSFERENCIA_INTERNA, request.valorReal());
 
             IndiceGlobal indice = indiceRepository.findFirstByAtivoTrue();
             Carteira origem = carteiraRepository.findByUsuarioId(request.usuarioOrigemId());
@@ -153,15 +153,21 @@ public class TransacaoService {
     }
 
     /**
-     * Garante idempotência por (requestKey + tipoTransacao).
-     * Permite operações sequenciais de TIPOS DIFERENTES (ex.: depósito seguido
-     * de saque) mesmo quando o front reutiliza a chave (ex.: código da carteira),
-     * mas continua bloqueando reenvios duplicados da MESMA operação.
+     * Garante idempotência por (requestKey + tipoTransacao + valorBruto).
+     *
+     * Objetivo: impedir que múltiplos cliques no mesmo botão criem duplicatas,
+     * mas SEM bloquear operações sequenciais legítimas:
+     *  - Depósito de R$500 + Saque de R$200 (tipos diferentes) => OK
+     *  - Saque de R$100 + Saque de R$200 (mesmo tipo, valores diferentes) => OK
+     *  - Depósito de R$500 + Depósito de R$500 com mesma chave => BLOQUEADO (duplo clique)
      */
-    private void verificarIdempotencia(String requestKey, TipoTransacao tipo) {
-        if (requestKey != null && transacaoRepository.existsByRequestKeyAndTipo(requestKey, tipo)) {
-            log.warn("Tentativa de duplicidade detectada para RequestKey: {} | Tipo: {}", requestKey, tipo);
-            throw new BusinessException("Transação já processada (RequestKey duplicada para o mesmo tipo de operação).");
+    private void verificarIdempotencia(String requestKey, TipoTransacao tipo, BigDecimal valor) {
+        if (requestKey != null
+                && transacaoRepository.existsByRequestKeyAndTipoAndValorBruto(requestKey, tipo, valor)) {
+            log.warn("Duplicidade detectada (múltiplos cliques) - RequestKey: {} | Tipo: {} | Valor: {}",
+                    requestKey, tipo, valor);
+            throw new BusinessException(
+                    "Transação já processada (operação idêntica detectada — possível múltiplo clique).");
         }
     }
 

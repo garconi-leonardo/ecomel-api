@@ -5,6 +5,7 @@ import br.com.ecomel.domain.enums.TipoTransacao;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 @Repository
@@ -22,10 +23,15 @@ public interface TransacaoRepository extends JpaRepository<Transacao, Long> {
     List<Transacao> findByCarteiraDestinoUsuarioIdOrderByCriadoEmDesc(Long usuarioId);
 
     /**
-     * Verifica se uma transação com esta chave de idempotência já existe
-     * para o MESMO tipo de operação. Permite reutilização da mesma chave
-     * entre tipos distintos (ex.: DEPOSITO seguido de SAQUE), bloqueando
-     * apenas duplicidades reais (mesma chave + mesmo tipo).
+     * Verifica se uma transação com esta combinação de
+     * (requestKey + tipo + valorBruto) já existe.
+     *
+     * Estratégia anti múltiplos cliques:
+     *  - Mesma chave + mesmo tipo + MESMO valor => duplicata (bloqueia).
+     *  - Mesma chave + mesmo tipo + valor DIFERENTE => operação legítima (libera).
+     *  - Mesma chave + tipo DIFERENTE => operação legítima (libera).
      */
-    boolean existsByRequestKeyAndTipo(String requestKey, TipoTransacao tipo);
+    boolean existsByRequestKeyAndTipoAndValorBruto(String requestKey,
+                                                   TipoTransacao tipo,
+                                                   BigDecimal valorBruto);
 }
