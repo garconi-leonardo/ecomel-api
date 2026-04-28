@@ -33,7 +33,7 @@ public class TransacaoService {
     @Transactional
     public void processarDeposito(Long usuarioId, BigDecimal valorReal, String requestKey) {
         try {
-            verificarIdempotencia(requestKey);
+            verificarIdempotencia(requestKey, TipoTransacao.DEPOSITO);
 
             IndiceGlobal indice = indiceRepository.findFirstByAtivoTrue();
             Carteira carteira = carteiraRepository.findByUsuarioId(usuarioId);
@@ -66,7 +66,7 @@ public class TransacaoService {
     @Transactional
     public void processarSaque(Long usuarioId, BigDecimal valorSaqueReal, String requestKey) {
         try {
-            verificarIdempotencia(requestKey);
+            verificarIdempotencia(requestKey, TipoTransacao.SAQUE);
 
             IndiceGlobal indice = indiceRepository.findFirstByAtivoTrue();
             Carteira carteira = carteiraRepository.findByUsuarioId(usuarioId);
@@ -102,7 +102,7 @@ public class TransacaoService {
     @Transactional
     public void transferirInterno(TransferenciaRequest request, String requestKey) {
         try {
-            verificarIdempotencia(requestKey);
+            verificarIdempotencia(requestKey, TipoTransacao.TRANSFERENCIA_INTERNA);
 
             IndiceGlobal indice = indiceRepository.findFirstByAtivoTrue();
             Carteira origem = carteiraRepository.findByUsuarioId(request.usuarioOrigemId());
@@ -152,10 +152,16 @@ public class TransacaoService {
         }
     }
 
-    private void verificarIdempotencia(String requestKey) {
-        if (requestKey != null && transacaoRepository.existsByRequestKey(requestKey)) {
-            log.warn("Tentativa de duplicidade detectada para RequestKey: {}", requestKey);
-            throw new BusinessException("Transação já processada (RequestKey duplicada).");
+    /**
+     * Garante idempotência por (requestKey + tipoTransacao).
+     * Permite operações sequenciais de TIPOS DIFERENTES (ex.: depósito seguido
+     * de saque) mesmo quando o front reutiliza a chave (ex.: código da carteira),
+     * mas continua bloqueando reenvios duplicados da MESMA operação.
+     */
+    private void verificarIdempotencia(String requestKey, TipoTransacao tipo) {
+        if (requestKey != null && transacaoRepository.existsByRequestKeyAndTipo(requestKey, tipo)) {
+            log.warn("Tentativa de duplicidade detectada para RequestKey: {} | Tipo: {}", requestKey, tipo);
+            throw new BusinessException("Transação já processada (RequestKey duplicada para o mesmo tipo de operação).");
         }
     }
 
