@@ -125,7 +125,7 @@ public class UsuarioService {
         usuarioRepository.save(usuario);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public UsuarioResponse buscarPorId(Long id) {
         // Nome do método ajustado para coincidir com o Repository discutido anteriormente
         Usuario usuario = usuarioRepository.findByPorId(id, StatusUsuario.ATIVO)

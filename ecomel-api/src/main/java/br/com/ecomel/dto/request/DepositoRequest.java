@@ -8,5 +8,5 @@ import java.math.BigDecimal;
 public record DepositoRequest(
     @NotNull Long usuarioId,
     @NotNull @Positive BigDecimal valor,
-    @NotBlank String requestKey // UUID único gerado no clique do botão
+    @NotBlank String requestKey // CODIGO DA CARTEIRA
 ) {}
