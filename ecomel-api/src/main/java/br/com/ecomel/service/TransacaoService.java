@@ -41,6 +41,8 @@ public class TransacaoService {
             IndiceGlobal indice = indiceRepository.findFirstByAtivoTrue();
             Carteira carteira = carteiraRepository.findByUsuarioId(usuarioId);
 
+            validarCarteiraAtiva(carteira);
+            
             BigDecimal taxaTotalReal = valorReal.multiply(new BigDecimal("0.10"));
             BigDecimal valorLiquidoReal = valorReal.subtract(taxaTotalReal);
 
@@ -76,6 +78,8 @@ public class TransacaoService {
             IndiceGlobal indice = indiceRepository.findFirstByAtivoTrue();
             Carteira carteira = carteiraRepository.findByUsuarioId(usuarioId);
 
+            validarCarteiraAtiva(carteira);
+            
             if (carteira.getSaldoReal(indice.getValor()).compareTo(valorSaqueReal) < 0) {
                 throw new BusinessException("Saldo insuficiente para saque.");
             }
@@ -116,6 +120,9 @@ public class TransacaoService {
             Carteira origem = carteiraRepository.findByUsuarioId(request.usuarioOrigemId());
             Carteira destino = carteiraRepository.findByCodigoEndereco(request.codigoDestino())
                     .orElseThrow(() -> new BusinessException("Carteira destino não encontrada."));
+            
+            validarCarteiraAtiva(origem);
+            validarCarteiraAtiva(destino);
 
             BigDecimal valorBase = request.valorReal().divide(indice.getValor(), 18, RoundingMode.DOWN);
             BigInteger valorToken = CalculoFinanceiroUtils.toTokenEcomel(valorBase);
@@ -164,6 +171,12 @@ public class TransacaoService {
     private void verificarIdempotencia(String requestKey) {
         if (requestKey != null && transacaoRepository.existsByRequestKey(requestKey)) {
             throw new BusinessException("Transação já processada.");
+        }
+    }
+    
+    private void validarCarteiraAtiva(Carteira carteira) {
+        if (carteira == null || !carteira.isAtivo()) {
+            throw new RuntimeException("Carteira não encontrada ou desativada: " + carteira.getCodigoEndereco());
         }
     }
 
