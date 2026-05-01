@@ -5,7 +5,7 @@ import java.math.BigInteger;
 
 public record CarteiraResponse(
     String codigoEndereco,
-    BigInteger tokenEcomel,     // Quantidade inteira de tokens ECOMEL (substitui saldoBaseECM)
+    BigDecimal tokenEcomel,     // Quantidade inteira de tokens ECOMEL (substitui saldoBaseECM)
     BigDecimal saldoRealECM,    // Valor valorizado (tokenEcomel * Indice)
     BigDecimal saldoFavos,      // Ativo negociável
     BigDecimal favosEmOrdem,    // FAVOS bloqueados em ordens de venda abertas
@@ -15,7 +15,7 @@ public record CarteiraResponse(
     // Construtor explícito para garantir a ordem e facilitar chamadas
     public CarteiraResponse(
             String codigoEndereco,
-            BigInteger tokenEcomel,
+            BigDecimal tokenEcomel,
             BigDecimal saldoRealECM,
             BigDecimal saldoFavos,
             BigDecimal favosEmOrdem,

@@ -69,7 +69,7 @@ public class CarteiraService {
                                                .setScale(18, RoundingMode.DOWN);
 
             // Credita os dividendos no tokenEcomel (truncado, sempre inteiro pra menos)
-            BigInteger dividendosToken = CalculoFinanceiroUtils.toTokenEcomel(dividendosEcm);
+            BigDecimal dividendosToken = CalculoFinanceiroUtils.formatarEcm(dividendosEcm);
             carteira.setTokenEcomel(carteira.getTokenEcomel().add(dividendosToken));
         }
         

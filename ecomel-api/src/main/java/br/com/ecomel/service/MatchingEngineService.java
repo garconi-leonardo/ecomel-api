@@ -60,13 +60,13 @@ public class MatchingEngineService {
         comprador.setSaldoFavos(comprador.getSaldoFavos().add(qtd));
         
         // 2. Entrega ECM ao vendedor (em tokens inteiros, sempre arredondado pra menos)
-        BigInteger ecmTokens = CalculoFinanceiroUtils.toTokenEcomel(ecm);
+        BigDecimal ecmTokens = CalculoFinanceiroUtils.formatarEcm(ecm);
         vendedor.setTokenEcomel(vendedor.getTokenEcomel().add(ecmTokens));
 
         // 3. Se o comprador pagou MAIS BARATO do que reservou originalmente (Sobra de ECM)
         if (nova.getTipo() == TipoOrdem.COMPRA && nova.getPrecoUnitario().compareTo(aberta.getPrecoUnitario()) > 0) {
              BigDecimal estornoEcm = qtd.multiply(nova.getPrecoUnitario().subtract(aberta.getPrecoUnitario()));
-             BigInteger estornoTokens = CalculoFinanceiroUtils.toTokenEcomel(estornoEcm);
+             BigDecimal estornoTokens = CalculoFinanceiroUtils.formatarEcm(estornoEcm);
              comprador.setTokenEcomel(comprador.getTokenEcomel().add(estornoTokens));
         }
 

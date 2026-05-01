@@ -27,7 +27,7 @@ CREATE TABLE carteiras (
     usuario_id BIGINT NOT NULL UNIQUE,
     codigo_endereco VARCHAR(20) NOT NULL UNIQUE, 
     saldo_favos DECIMAL(38, 8) NOT NULL DEFAULT 0,
-    token_ecomel NUMERIC(38, 0) NOT NULL DEFAULT 0,
+    token_ecomel DECIMAL(38, 8) NOT NULL DEFAULT 0,
     ultimo_indice_favo DECIMAL(38, 18) NOT NULL DEFAULT 0, 
     ativo BOOLEAN NOT NULL DEFAULT TRUE,
     criado_em TIMESTAMP NOT NULL,

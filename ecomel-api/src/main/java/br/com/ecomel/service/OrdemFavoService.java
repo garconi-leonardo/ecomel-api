@@ -38,7 +38,7 @@ public class OrdemFavoService {
         } else {
             // Compra: Reserva ECM (Tokens). Valor = Qtd * Preço (sempre inteiro pra menos)
             BigDecimal valorNecessarioEcm = request.quantidade().multiply(request.precoUnitario());
-            BigInteger valorNecessarioToken = CalculoFinanceiroUtils.toTokenEcomel(valorNecessarioEcm);
+            BigDecimal valorNecessarioToken = CalculoFinanceiroUtils.formatarEcm(valorNecessarioEcm);
             if (carteira.getTokenEcomel().compareTo(valorNecessarioToken) < 0) {
                 throw new BusinessException("Saldo ECM insuficiente para compra.");
             }
@@ -85,7 +85,7 @@ public class OrdemFavoService {
         } else {
             // Devolve o montante em ECM (Quantidade * Preço) que ainda não foi usado
             BigDecimal valorDevolucaoEcm = ordem.getQuantidadeRestante().multiply(ordem.getPrecoUnitario());
-            BigInteger valorDevolucaoToken = CalculoFinanceiroUtils.toTokenEcomel(valorDevolucaoEcm);
+            BigDecimal valorDevolucaoToken = CalculoFinanceiroUtils.formatarEcm(valorDevolucaoEcm);
             carteira.setTokenEcomel(carteira.getTokenEcomel().add(valorDevolucaoToken));
         }
 

@@ -26,8 +26,8 @@ public class Carteira extends BaseAuditavel {
      * SEMPRE inteiro, com arredondamento para menos em qualquer conversão.
      * Substitui o antigo "saldoBase".
      */
-    @Column(name = "token_ecomel", nullable = false, precision = 38, scale = 0)
-    private BigInteger tokenEcomel = BigInteger.ZERO;
+    @Column(name = "token_ecomel", nullable = false, precision = 38, scale = 8)
+    private BigDecimal tokenEcomel = BigDecimal.ZERO;
 
     // Saldo de FAVOS (Ativo negociável)
     @Column(nullable = false, precision = 20, scale = 8)
@@ -41,6 +41,6 @@ public class Carteira extends BaseAuditavel {
      * saldoReal = tokenEcomel * indiceGlobal
      */
     public BigDecimal getSaldoReal(BigDecimal valorIndiceGlobal) {
-        return new BigDecimal(this.tokenEcomel).multiply(valorIndiceGlobal);
+        return this.tokenEcomel.multiply(valorIndiceGlobal);
     }
 }

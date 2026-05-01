@@ -50,7 +50,7 @@ public class TransacaoService {
             indice.setValor(indice.getValor().multiply(fatorCrescimento).setScale(18, RoundingMode.DOWN));
 
             BigDecimal incrementoBase = valorLiquidoReal.divide(indice.getValor(), 18, RoundingMode.DOWN);
-            BigInteger incrementoToken = CalculoFinanceiroUtils.toTokenEcomel(incrementoBase);
+            BigDecimal incrementoToken = CalculoFinanceiroUtils.formatarEcm(incrementoBase);
             carteira.setTokenEcomel(carteira.getTokenEcomel().add(incrementoToken));
 
             BigDecimal montanteFavosBase = valorReal.multiply(new BigDecimal("0.0401"))
@@ -91,7 +91,7 @@ public class TransacaoService {
 
             BigDecimal debitoBase = valorSaqueReal.divide(indice.getValor(), 18, RoundingMode.DOWN);
             // Debita em tokens inteiros (arredonda para menos para nunca debitar a menos do que devido)
-            BigInteger debitoToken = CalculoFinanceiroUtils.toTokenEcomel(debitoBase);
+            BigDecimal debitoToken = CalculoFinanceiroUtils.formatarEcm(debitoBase);
             carteira.setTokenEcomel(carteira.getTokenEcomel().subtract(debitoToken));
 
             BigDecimal montanteFavosBase = valorSaqueReal.multiply(new BigDecimal("0.0401"))
@@ -125,7 +125,7 @@ public class TransacaoService {
             validarCarteiraAtiva(destino);
 
             BigDecimal valorBase = request.valorReal().divide(indice.getValor(), 18, RoundingMode.DOWN);
-            BigInteger valorToken = CalculoFinanceiroUtils.toTokenEcomel(valorBase);
+            BigDecimal valorToken = CalculoFinanceiroUtils.formatarEcm(valorBase);
 
             if (origem.getTokenEcomel().compareTo(valorToken) < 0) {
                 throw new BusinessException("Saldo insuficiente para transferência.");
