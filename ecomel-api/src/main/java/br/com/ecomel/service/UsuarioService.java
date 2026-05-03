@@ -1,6 +1,7 @@
 package br.com.ecomel.service;
 
 import br.com.ecomel.domain.entity.Carteira;
+import br.com.ecomel.domain.entity.IndiceGlobal;
 import br.com.ecomel.domain.entity.Usuario;
 import br.com.ecomel.domain.enums.StatusUsuario;
 import br.com.ecomel.dto.request.UsuarioRequest;
@@ -8,6 +9,7 @@ import br.com.ecomel.dto.response.CarteiraResponse;
 import br.com.ecomel.dto.response.UsuarioResponse;
 import br.com.ecomel.exception.BusinessException;
 import br.com.ecomel.repository.CarteiraRepository;
+import br.com.ecomel.repository.IndiceGlobalRepository;
 import br.com.ecomel.repository.UsuarioRepository;
 import br.com.ecomel.util.GeradorCodigoCarteira;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +32,7 @@ public class UsuarioService {
     private final PasswordEncoder passwordEncoder;
     private final CarteiraService carteiraService;
     private final AuditorAware<String> auditorProvider;
+    private final IndiceGlobalRepository indiceRepository;
 
     /**
      * Encapsula os dados de auditoria atuais.
@@ -103,25 +106,46 @@ public class UsuarioService {
 
     @Transactional
     public void inativar(Long id) {
+
         Usuario usuario = usuarioRepository.findById(id)
                 .orElseThrow(() -> new BusinessException("Usuário não encontrado"));
-        
-        if (usuario.getCarteira().getTokenEcomel().compareTo(BigDecimal.ZERO) > 0 || 
-            usuario.getCarteira().getSaldoFavos().compareTo(BigDecimal.ZERO) > 0) {
-            throw new BusinessException("Conta possui ativos. Zere os saldos antes de desativar.");
+
+        if (usuario.getCarteira() == null) {
+            throw new BusinessException("Usuário não possui carteira associada.");
         }
 
+        Carteira carteira = usuario.getCarteira();
+
+        //Buscar índice atual (necessário para converter token -> real)
+        IndiceGlobal indice = indiceRepository.findFirstByAtivoTrue();
+
+        //Definir limite mínimo (1 centavo)
+        BigDecimal limiteMinimo = new BigDecimal("0.01");
+
+        //Calcular saldo em REAL
+        BigDecimal saldoReal = carteira.getSaldoReal(indice.getValor());
+
+        //só bloqueia se tiver valor relevante
+        boolean possuiSaldoRelevante =
+                saldoReal.compareTo(limiteMinimo) >= 0 ||
+                carteira.getSaldoFavos().compareTo(limiteMinimo) >= 0;
+
+        if (possuiSaldoRelevante) {
+            throw new BusinessException("Conta possui ativos relevantes. Zere os saldos antes de desativar.");
+        }
+
+        //Auditoria
         AuditContext audit = getAuditContext();
+
         usuario.setAtivo(false);
         usuario.setStatus(StatusUsuario.BLOQUEADO);
         usuario.setDesativadoEm(audit.data());
         usuario.setDesativadoPor(audit.usuario());
-        
-        if (usuario.getCarteira() != null) {
-            usuario.getCarteira().setAtivo(false);
-            usuario.getCarteira().setDesativadoEm(audit.data());
-            usuario.getCarteira().setDesativadoPor(audit.usuario());
-        }
+
+        //Desativar carteira
+        carteira.setAtivo(false);
+        carteira.setDesativadoEm(audit.data());
+        carteira.setDesativadoPor(audit.usuario());
 
         usuarioRepository.save(usuario);
     }

@@ -10,11 +10,14 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface IndiceGlobalRepository extends JpaRepository<IndiceGlobal, Long> {
 
-    /**
-     * Recupera o índice ativo com LOCK PESSIMISTA de escrita.
-     * Nenhuma outra transação poderá ler ou alterar o índice até que esta termine.
-     */
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
+	
+	/**
+	 * Recupera o índice ativo com LOCK PESSIMISTA de escrita. 
+	 * Nenhuma outra transação poderá ler ou alterar o índice até que esta termine.
+	 */
+    @Lock(LockModeType.OPTIMISTIC)
     @Query("SELECT i FROM IndiceGlobal i WHERE i.ativo = true")
     IndiceGlobal findFirstByAtivoTrue();
+
 }
+

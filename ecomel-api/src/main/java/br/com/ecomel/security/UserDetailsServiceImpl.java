@@ -3,9 +3,12 @@ package br.com.ecomel.security;
 import br.com.ecomel.domain.entity.Carteira;
 import br.com.ecomel.domain.entity.Usuario;
 import br.com.ecomel.domain.enums.StatusUsuario;
+import br.com.ecomel.exception.BusinessException;
 import br.com.ecomel.repository.CarteiraRepository;
 import br.com.ecomel.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
+
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -46,4 +49,29 @@ public class UserDetailsServiceImpl implements UserDetailsService {
                 .authorities(Collections.emptyList()) // Adicione roles se tiver
                 .build();
     }
+    
+    public void executarComRetry(Runnable operacao) {
+        int tentativas = 0;
+        int maxTentativas = 3;
+
+        while (true) {
+            try {
+                operacao.run();
+                return;
+            } catch (ObjectOptimisticLockingFailureException e) {
+                tentativas++;
+
+                if (tentativas >= maxTentativas) {
+                    throw new BusinessException("Sistema ocupado. Tente novamente.");
+                }
+
+                try {
+                    Thread.sleep(50); // pequeno backoff
+                } catch (InterruptedException ex) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+        }
+    }
+
 }

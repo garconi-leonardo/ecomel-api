@@ -4,6 +4,7 @@ import br.com.ecomel.dto.request.DepositoRequest;
 import br.com.ecomel.dto.request.SaqueRequest;
 import br.com.ecomel.dto.request.TransferenciaRequest;
 import br.com.ecomel.dto.response.TransacaoResponse;
+import br.com.ecomel.security.UserDetailsServiceImpl;
 import br.com.ecomel.service.TransacaoService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -23,12 +24,14 @@ import java.util.List;
 public class TransacaoController {
 
     private final TransacaoService service;
+    private final UserDetailsServiceImpl userDetailsService;
 
     @PostMapping("/deposito")
     @Operation(summary = "Realizar depósito", description = "Injeta capital e valoriza o Índice Global em 5%")
     public ResponseEntity<Void> depositar(@RequestBody @Valid DepositoRequest request) {
         // Adicionado o parâmetro requestKey para idempotência
-        service.processarDeposito(request.usuarioId(), request.valor(), request.requestKey());
+        userDetailsService.executarComRetry(() -> 
+        service.processarDeposito(request.usuarioId(), request.valor(), request.requestKey()));
         return ResponseEntity.ok().build();
     }
 
@@ -36,7 +39,7 @@ public class TransacaoController {
     @Operation(summary = "Realizar saque", description = "Retira capital e valoriza o Índice Global em 5%")
     public ResponseEntity<Void> sacar(@RequestBody @Valid SaqueRequest request) {
         // Corrigido para SaqueRequest e adicionado requestKey
-        service.processarSaque(request.usuarioId(), request.valor(), request.requestKey());
+    	userDetailsService.executarComRetry(() -> service.processarSaque(request.usuarioId(), request.valor(), request.requestKey()));
         return ResponseEntity.ok().build();
     }
     
@@ -50,7 +53,7 @@ public class TransacaoController {
     @Operation(summary = "Transferência interna", description = "Envia ECM para outra carteira usando o código AAA111")
     public ResponseEntity<Void> transferir(@RequestBody @Valid TransferenciaRequest request) {
         // Adicionado o parâmetro requestKey para idempotência
-        service.transferirInterno(request, request.requestKey());
+    	userDetailsService.executarComRetry(() ->service.transferirInterno(request, request.requestKey()));
         return ResponseEntity.ok().build();
     }
 }

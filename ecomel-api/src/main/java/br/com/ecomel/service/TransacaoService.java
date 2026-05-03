@@ -35,115 +35,249 @@ public class TransacaoService {
     @Transactional
     public void processarDeposito(Long usuarioId, BigDecimal valorReal, String requestKey) {
         try {
-            
-        	verificarIdempotencia(requestKey);
-        	
+
+            verificarIdempotencia(requestKey);
+
             IndiceGlobal indice = indiceRepository.findFirstByAtivoTrue();
             Carteira carteira = carteiraRepository.findByUsuarioId(usuarioId);
 
             validarCarteiraAtiva(carteira);
-            
-            BigDecimal taxaTotalReal = valorReal.multiply(new BigDecimal("0.10"));
-            BigDecimal valorLiquidoReal = valorReal.subtract(taxaTotalReal);
 
-            BigDecimal fatorCrescimento = BigDecimal.ONE.add(new BigDecimal("0.05"));
-            indice.setValor(indice.getValor().multiply(fatorCrescimento).setScale(18, RoundingMode.DOWN));
+            //Taxa total (10%)
+            BigDecimal taxaTotal = valorReal.multiply(new BigDecimal("0.10"));
+            BigDecimal valorLiquido = valorReal.subtract(taxaTotal);
 
-            BigDecimal incrementoBase = valorLiquidoReal.divide(indice.getValor(), 18, RoundingMode.DOWN);
-            BigDecimal incrementoToken = CalculoFinanceiroUtils.formatarEcm(incrementoBase);
-            carteira.setTokenEcomel(carteira.getTokenEcomel().add(incrementoToken));
+            //Distribuição da taxa
+            BigDecimal valorParaLastro = valorReal.multiply(new BigDecimal("0.05"));   // ECOMEL
+            BigDecimal valorFavos = valorReal.multiply(new BigDecimal("0.0401"));
+            BigDecimal valorGateway = valorReal.multiply(new BigDecimal("0.0099"));
 
-            BigDecimal montanteFavosBase = valorReal.multiply(new BigDecimal("0.0401"))
-                                                   .divide(indice.getValor(), 18, RoundingMode.DOWN);
-            distribuicaoService.distribuirTaxaFavos(montanteFavosBase);
+            //Estado atual
+            BigDecimal indiceAtual = indice.getValor();
+            BigDecimal liquidez = indice.getLiquidezTotal();
+            BigDecimal totalEcm = obterTotalEcm();
 
-            salvarTransacao(carteira, valorReal, valorLiquidoReal, taxaTotalReal, TipoTransacao.DEPOSITO, requestKey);
+            //Calcular tokens (ANTES de atualizar liquidez)
+            BigDecimal tokensComprados = valorLiquido.divide(indiceAtual, 18, RoundingMode.DOWN);
+            tokensComprados = CalculoFinanceiroUtils.formatarEcm(tokensComprados);
+
+            //Atualizar liquidez (LASTRO REAL)
+            liquidez = liquidez
+                    .add(valorLiquido)     // entra dinheiro real
+                    .add(valorParaLastro); // entra reserva de valorização
+
+            indice.setLiquidezTotal(liquidez);
+
+            //Creditar tokens
+            carteira.setTokenEcomel(
+                    carteira.getTokenEcomel().add(tokensComprados)
+            );
+
+            //Novo total de tokens
+            BigDecimal novoTotalEcm = totalEcm.add(tokensComprados);
+
+            //Recalcular índice (PREÇO REAL)
+            if (novoTotalEcm.compareTo(BigDecimal.ZERO) > 0) {
+                BigDecimal novoIndice = liquidez.divide(novoTotalEcm, 18, RoundingMode.DOWN);
+                indice.setValor(novoIndice);
+            }
+
+            //Distribuir favos
+            BigDecimal favosBase = valorFavos.divide(indice.getValor(), 18, RoundingMode.DOWN);
+            distribuicaoService.distribuirTaxaFavos(favosBase);
+
+            //Registrar transação
+            salvarTransacao(
+                    carteira,
+                    valorReal,
+                    valorLiquido,
+                    taxaTotal,
+                    TipoTransacao.DEPOSITO,
+                    requestKey
+            );
 
             indiceRepository.save(indice);
             carteiraRepository.save(carteira);
-            
-            log.info("Depósito processado com sucesso. Usuario: {}, Valor: {}", usuarioId, valorReal);
-        } catch (Exception e) {
-            log.error("Erro ao processar depósito para o usuário {}: {}", usuarioId, e.getMessage());
-            throw e; // Relançar é fundamental para o Rollback do @Transactional
+
+                log.info("Depósito sustentável realizado. Usuario: {}, Valor: {}", usuarioId, valorReal);
+
+            } catch (Exception e) {
+                log.error("Erro ao processar depósito. Usuario: {}, Valor: {}", usuarioId, valorReal);
+                log.error("Erro: {}", e.getMessage());
+                throw e;
+            }
         }
-    }
+
+
 
     @Transactional
     public void processarSaque(Long usuarioId, BigDecimal valorSaqueReal, String requestKey) {
         try {
-            
-        	verificarIdempotencia(requestKey);
-        	
+
+            verificarIdempotencia(requestKey);
+
             IndiceGlobal indice = indiceRepository.findFirstByAtivoTrue();
             Carteira carteira = carteiraRepository.findByUsuarioId(usuarioId);
 
             validarCarteiraAtiva(carteira);
-            
-            if (carteira.getSaldoReal(indice.getValor()).compareTo(valorSaqueReal) < 0) {
+
+            BigDecimal indiceAtual = indice.getValor();
+
+            //Calcular tokens necessários (BASE DA VALIDAÇÃO)
+            BigDecimal tokensNecessarios = valorSaqueReal.divide(indiceAtual, 18, RoundingMode.DOWN);
+            tokensNecessarios = CalculoFinanceiroUtils.formatarEcm(tokensNecessarios);
+
+            //Validar saldo em TOKEN (CORREÇÃO CRÍTICA)
+            if (carteira.getTokenEcomel().compareTo(tokensNecessarios) < 0) {
                 throw new BusinessException("Saldo insuficiente para saque.");
             }
 
-            BigDecimal taxaTotalReal = valorSaqueReal.multiply(new BigDecimal("0.10"));
-            
-            BigDecimal fatorCrescimento = BigDecimal.ONE.add(new BigDecimal("0.05"));
-            indice.setValor(indice.getValor().multiply(fatorCrescimento).setScale(18, RoundingMode.DOWN));
+            //Taxa total (10%)
+            BigDecimal taxaTotal = valorSaqueReal.multiply(new BigDecimal("0.10"));
+            BigDecimal valorLiquido = valorSaqueReal.subtract(taxaTotal);
 
-            BigDecimal debitoBase = valorSaqueReal.divide(indice.getValor(), 18, RoundingMode.DOWN);
-            // Debita em tokens inteiros (arredonda para menos para nunca debitar a menos do que devido)
-            BigDecimal debitoToken = CalculoFinanceiroUtils.formatarEcm(debitoBase);
-            carteira.setTokenEcomel(carteira.getTokenEcomel().subtract(debitoToken));
+            //Distribuição
+            BigDecimal valorParaLastro = valorSaqueReal.multiply(new BigDecimal("0.05"));
+            BigDecimal valorFavos = valorSaqueReal.multiply(new BigDecimal("0.0401"));
+            BigDecimal valorGateway = valorSaqueReal.multiply(new BigDecimal("0.0099"));
 
-            BigDecimal montanteFavosBase = valorSaqueReal.multiply(new BigDecimal("0.0401"))
-                                                   .divide(indice.getValor(), 18, RoundingMode.DOWN);
-            distribuicaoService.distribuirTaxaFavos(montanteFavosBase);
+            //Estado atual
+            BigDecimal liquidez = indice.getLiquidezTotal();
+            BigDecimal totalEcm = obterTotalEcm();
 
-            salvarTransacao(carteira, valorSaqueReal, valorSaqueReal.subtract(taxaTotalReal), taxaTotalReal, TipoTransacao.SAQUE, requestKey);
+            //Atualizar tokens (REMOVER)
+            carteira.setTokenEcomel(
+                    carteira.getTokenEcomel().subtract(tokensNecessarios)
+            );
+
+            //Atualizar liquidez
+            liquidez = liquidez
+                    .subtract(valorSaqueReal) // sai dinheiro
+                    .add(valorParaLastro);    // parte da taxa volta como lastro
+
+            if (liquidez.compareTo(BigDecimal.ZERO) < 0) {
+                throw new BusinessException("Liquidez insuficiente no sistema.");
+            }
+
+            indice.setLiquidezTotal(liquidez);
+
+            //Novo total de tokens
+            BigDecimal novoTotalEcm = totalEcm.subtract(tokensNecessarios);
+
+            //Recalcular índice
+            if (novoTotalEcm.compareTo(BigDecimal.ZERO) > 0) {
+                BigDecimal novoIndice = liquidez.divide(novoTotalEcm, 18, RoundingMode.DOWN);
+                indice.setValor(novoIndice);
+            } else {
+                indice.setValor(BigDecimal.ONE); // reset seguro
+            }
+
+            //Distribuir favos
+            BigDecimal favosBase = valorFavos.divide(indice.getValor(), 18, RoundingMode.DOWN);
+            distribuicaoService.distribuirTaxaFavos(favosBase);
+
+            //Registrar transação
+            salvarTransacao(
+                    carteira,
+                    valorSaqueReal,
+                    valorLiquido,
+                    taxaTotal,
+                    TipoTransacao.SAQUE,
+                    requestKey
+            );
 
             indiceRepository.save(indice);
             carteiraRepository.save(carteira);
-            
-            log.info("Saque processado com sucesso. Usuario: {}, Valor: {}", usuarioId, valorSaqueReal);
-        } catch (Exception e) {
-            log.error("Erro ao processar saque para o usuário {}: {}", usuarioId, e.getMessage());
-            throw e;
+
+                log.info("Saque processado com sucesso: Usuario: {}, Valor: {}", usuarioId, valorSaqueReal);
+
+            } catch (Exception e) {            
+            	log.error("Erro ao processar saque. Usuario: {}, Valor: {}", usuarioId, valorSaqueReal);
+            	log.error("Erro ao processar saque para o usuário {}: {}", usuarioId, e.getMessage());
+                throw e;
+            }
         }
-    }
+
+
 
     @Transactional
     public void transferirInterno(TransferenciaRequest request, String requestKey) {
         try {
-           
-        	verificarIdempotencia(requestKey);
-        	
+
+            verificarIdempotencia(requestKey);
+
+            //Validação básica de entrada
+            if (request.codigoDestino() == null || request.codigoDestino().trim().isEmpty()) {
+                throw new BusinessException("Informe uma carteira válida.");
+            }
+
+            if (request.valorReal() == null || request.valorReal().compareTo(BigDecimal.ZERO) <= 0) {
+                throw new BusinessException("Valor de transferência inválido.");
+            }
+
+            //Buscar dados
             IndiceGlobal indice = indiceRepository.findFirstByAtivoTrue();
+
             Carteira origem = carteiraRepository.findByUsuarioId(request.usuarioOrigemId());
-            Carteira destino = carteiraRepository.findByCodigoEndereco(request.codigoDestino())
-                    .orElseThrow(() -> new BusinessException("Carteira destino não encontrada."));
-            
+
+            Carteira destino = carteiraRepository.findByCodigoEndereco(request.codigoDestino().trim())
+                    .orElseThrow(() -> new BusinessException("Informe uma carteira válida."));
+
+            //Validar carteiras
             validarCarteiraAtiva(origem);
             validarCarteiraAtiva(destino);
 
-            BigDecimal valorBase = request.valorReal().divide(indice.getValor(), 18, RoundingMode.DOWN);
+            //NÃO PERMITIR TRANSFERÊNCIA PARA SI MESMO
+            if (origem.getId().equals(destino.getId())) {
+                throw new BusinessException("Informe uma carteira válida.");
+            }
+
+            //Índice atual
+            BigDecimal indiceAtual = indice.getValor();
+
+            if (indiceAtual.compareTo(BigDecimal.ZERO) <= 0) {
+                throw new BusinessException("Índice inválido para operação.");
+            }
+
+            //Converter REAL → TOKEN (momento da execução)
+            BigDecimal valorBase = request.valorReal().divide(indiceAtual, 18, RoundingMode.DOWN);
             BigDecimal valorToken = CalculoFinanceiroUtils.formatarEcm(valorBase);
 
+            if (valorToken.compareTo(BigDecimal.ZERO) <= 0) {
+                throw new BusinessException("Valor insuficiente para transferência.");
+            }
+
+            //Validar saldo em TOKEN
             if (origem.getTokenEcomel().compareTo(valorToken) < 0) {
                 throw new BusinessException("Saldo insuficiente para transferência.");
             }
 
+            //Movimentação (não altera índice nem liquidez)
             origem.setTokenEcomel(origem.getTokenEcomel().subtract(valorToken));
             destino.setTokenEcomel(destino.getTokenEcomel().add(valorToken));
 
-            salvarTransacaoInterna(origem, destino, request.valorReal(), requestKey);
+            salvarTransacaoInterna(
+                    origem,
+                    destino,
+                    request.valorReal(),
+                    requestKey
+            );
 
             carteiraRepository.save(origem);
             carteiraRepository.save(destino);
-            
-            log.info("Transferência interna realizada: {} -> {}, Valor Real: {}", 
-                     request.usuarioOrigemId(), request.codigoDestino(), request.valorReal());
+
+            log.info("Transferência interna realizada com sucesso: {} -> {}, Valor Real: {}",
+                    request.usuarioOrigemId(),
+                    request.codigoDestino(),
+                    request.valorReal());
+
         } catch (Exception e) {
-            log.error("Erro na transferência interna: {}", e.getMessage());
-            throw e;
+        		log.error("Erro na transferência interna: {} -> {}, Valor Real: {}",
+                    request.usuarioOrigemId(),
+                    request.codigoDestino(),
+                    request.valorReal());
+                log.error("Erro na transferência interna: {}", e.getMessage());
+                throw e;
         }
     }
 
@@ -178,6 +312,16 @@ public class TransacaoService {
         if (carteira == null || !carteira.isAtivo()) {
             throw new RuntimeException("Carteira não encontrada ou desativada: " + carteira.getCodigoEndereco());
         }
+    }
+    
+    private BigDecimal obterTotalEcm() {
+        BigDecimal total = carteiraRepository.somarTotalEcomelAtivo();
+
+        if (total == null || total.compareTo(BigDecimal.ZERO) == 0) {
+            return BigDecimal.ONE; // evita divisão por zero no início do sistema
+        }
+
+        return total;
     }
 
 

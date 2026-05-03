@@ -13,6 +13,10 @@ import java.math.BigInteger;
 @Getter
 @Setter
 public class Carteira extends BaseAuditavel {
+	
+	@Version //campo preenchido pelo hibernate para impedir divergencia de valores durante as transações
+	@Column(name = "versao")
+	private Long versao;
 
     @Column(nullable = false, unique = true, length = 20)
     private String codigoEndereco; // Identificador AAA001

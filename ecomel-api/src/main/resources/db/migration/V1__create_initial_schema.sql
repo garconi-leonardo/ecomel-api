@@ -23,6 +23,7 @@ CREATE TABLE usuario_perfis (
 
 -- 3. Tabela de Carteiras (Inclui Código Alfanumérico e controle de dividendos)
 CREATE TABLE carteiras (
+	versao BIGINT DEFAULT 0,
     id BIGSERIAL PRIMARY KEY,
     usuario_id BIGINT NOT NULL UNIQUE,
     codigo_endereco VARCHAR(20) NOT NULL UNIQUE, 
@@ -68,8 +69,10 @@ CREATE INDEX idx_transacao_request_key ON transacoes(request_key);
 
 -- 5. Tabela de Índice Global (Com acumulador de dividendos de FAVOS)
 CREATE TABLE indice_global (
-    id BIGSERIAL PRIMARY KEY,
+	versao BIGINT NOT NULL DEFAULT 0,
+    id BIGSERIAL PRIMARY KEY,   
     valor DECIMAL(38, 18) NOT NULL DEFAULT 1.0,
+    liquidez_total DECIMAL(38, 18) NOT NULL DEFAULT 0, --numero de tokens de ecomel disponiveis no sistema
     indice_favo_acumulado DECIMAL(38, 18) NOT NULL DEFAULT 0, 
     ativo BOOLEAN NOT NULL DEFAULT TRUE,
     criado_em TIMESTAMP NOT NULL,
@@ -80,6 +83,7 @@ CREATE TABLE indice_global (
     desativado_por VARCHAR(255)
 );
 
+
 -- Inserir o índice inicial obrigatório
-INSERT INTO indice_global (valor, indice_favo_acumulado, ativo, criado_em, criado_por) 
-VALUES (1.000000000000000000, 0.000000000000000000, TRUE, CURRENT_TIMESTAMP, 'SYSTEM');
+INSERT INTO indice_global (valor, liquidez_total, indice_favo_acumulado, ativo, criado_em, criado_por) 
+VALUES (1.000000000000000000, 0.000000000000000000, 0.000000000000000000, TRUE, CURRENT_TIMESTAMP, 'ECOMEL');
