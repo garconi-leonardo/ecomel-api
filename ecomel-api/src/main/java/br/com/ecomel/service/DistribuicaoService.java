@@ -1,5 +1,6 @@
 package br.com.ecomel.service;
 
+import br.com.ecomel.domain.entity.Carteira;
 import br.com.ecomel.domain.entity.IndiceGlobal;
 import br.com.ecomel.repository.CarteiraRepository;
 import br.com.ecomel.repository.IndiceGlobalRepository;
@@ -18,21 +19,47 @@ public class DistribuicaoService {
 
     @Transactional
     public void distribuirTaxaFavos(BigDecimal valorTotalTransacaoEcm) {
-        // 1. Calcular montante de 4,01% da transação (em ECM)
-        BigDecimal montanteEcmParaFavos = valorTotalTransacaoEcm.multiply(new BigDecimal("0.0401"));
-        
-        // 2. Obter total de FAVOS circulantes no sistema
+
         BigDecimal totalFavosGlobal = carteiraRepository.sumTotalFavos();
-        
+
         if (totalFavosGlobal.compareTo(BigDecimal.ZERO) <= 0) return;
 
-        // 3. Atualizar o Indice Global de Favos (Acumulador)
-        // NovoIndice = AntigoIndice + (MontanteDistribuicao / TotalFavos)
-        IndiceGlobal indice = indiceRepository.findFirstByAtivoTrue();
-        
-        BigDecimal incrementoPorFavo = montanteEcmParaFavos.divide(totalFavosGlobal, 18, RoundingMode.HALF_UP);
-        indice.setIndiceFavoAcumulado(indice.getIndiceFavoAcumulado().add(incrementoPorFavo));
-        
+        IndiceGlobal indice = indiceRepository.findFirstByAtivoTrueWithLock();
+
+        BigDecimal incrementoPorFavo = valorTotalTransacaoEcm
+                .divide(totalFavosGlobal, 18, RoundingMode.DOWN);
+
+        indice.setIndiceFavoAcumulado(
+                indice.getIndiceFavoAcumulado().add(incrementoPorFavo)
+        );
+
         indiceRepository.save(indice);
     }
+    
+    @Transactional
+    public void aplicarRendimentoFavos(Carteira carteira) {
+
+        if (carteira.getSaldoFavos().compareTo(BigDecimal.ZERO) <= 0) return;
+
+        IndiceGlobal indice = indiceRepository.findFirstByAtivoTrueWithLock();
+
+        BigDecimal indiceAtual = indice.getIndiceFavoAcumulado();
+        BigDecimal ultimoIndice = carteira.getUltimoIndiceFavo();
+
+        BigDecimal diferenca = indiceAtual.subtract(ultimoIndice);
+
+        if (diferenca.compareTo(BigDecimal.ZERO) <= 0) return;
+
+        BigDecimal ganho = diferenca.multiply(carteira.getSaldoFavos());
+
+        //crédito em ECOMEL (mel virando token)
+        carteira.setTokenEcomel(
+            carteira.getTokenEcomel().add(ganho)
+        );
+
+        //atualizar checkpoint
+        carteira.setUltimoIndiceFavo(indiceAtual);
+    }
+
+
 }

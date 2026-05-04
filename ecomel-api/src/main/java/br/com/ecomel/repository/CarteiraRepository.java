@@ -10,15 +10,15 @@ import java.util.Optional;
 
 public interface CarteiraRepository extends JpaRepository<Carteira, Long> {
     
-    @Query("SELECT MAX(c.codigoEndereco) FROM Carteira c")
-    String findMaxCodigoEndereco();
+    @Query("SELECT MAX(c.codigoCarteira) FROM Carteira c")
+    String findMaxCodigoCarteira();
 
-    boolean existsByCodigoEndereco(String codigoEndereco);
+    boolean existsByCodigoCarteira(String codigoCarteira);
 
-    Optional<Carteira> findByCodigoEndereco(String codigoEndereco);
+    Optional<Carteira> findByCodigoCarteira(String codigoCarteira);
     
     @Query("SELECT c FROM Carteira c WHERE c.usuario.id = :usuarioId")
-    Carteira findByUsuarioId(Long usuarioId);
+    Optional<Carteira> findByUsuarioId(Long usuarioId);
     
     @Query("SELECT SUM(c.saldoFavos) FROM Carteira c")
     BigDecimal sumTotalFavos();

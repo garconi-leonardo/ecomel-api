@@ -7,7 +7,7 @@ import java.time.LocalDateTime;
 
 public record OrdemFavoResponse(
     Long id,
-    String codigoEnderecoCarteira, // Identificador AAA111 de quem criou a ordem
+    String codigoCarteira, // Identificador AAA111 de quem criou a ordem
     TipoOrdem tipo,
     BigDecimal quantidadeOriginal,
     BigDecimal quantidadeRestante,

@@ -2,7 +2,7 @@ package br.com.ecomel.domain.enums;
 
 public enum StatusOrdem {
     ABERTA,
-    PARCIAL,
+    PARCIALMENTE_EXECUTADA,
     EXECUTADA,
     CANCELADA
 }

@@ -3,51 +3,118 @@ package br.com.ecomel.repository;
 import br.com.ecomel.domain.entity.OrdemFavo;
 import br.com.ecomel.domain.enums.StatusOrdem;
 import br.com.ecomel.domain.enums.TipoOrdem;
-
+import jakarta.persistence.LockModeType;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+
 import java.math.BigDecimal;
 import java.util.Collection;
 import java.util.List;
 
 public interface OrdemFavoRepository extends JpaRepository<OrdemFavo, Long> {
 
-    // Busca ordens de VENDA com preço menor ou igual ao preço de COMPRA (Ordenado por preço ASC - mais barato primeiro)
-    @Query("SELECT o FROM OrdemFavo o WHERE o.tipo = 'VENDA' " +
-           "AND o.status IN ('ABERTA', 'PARCIAL') " +
-           "AND o.precoUnitario <= :preco " +
-           "ORDER BY o.precoUnitario ASC, o.criadoEm ASC")
-    List<OrdemFavo> findVendasCompativeis(@Param("preco") BigDecimal preco);
+    // =====================================================
+    // 🔥 MATCHING ENGINE (LOCK + PRICE-TIME PRIORITY)
+    // =====================================================
 
-    // Busca ordens de COMPRA com preço maior ou igual ao preço de VENDA (Ordenado por preço DESC - mais caro primeiro)
-    @Query("SELECT o FROM OrdemFavo o WHERE o.tipo = 'COMPRA' " +
-           "AND o.status IN ('ABERTA', 'PARCIAL') " +
-           "AND o.precoUnitario >= :preco " +
-           "ORDER BY o.precoUnitario DESC, o.criadoEm ASC")
-    List<OrdemFavo> findComprasCompativeis(@Param("preco") BigDecimal preco);
-    
-    /**
-     * Busca ordens de venda para o comprador. 
-     * Ordena pelo menor preço primeiro (Melhor oferta de compra).
-     */
-    List<OrdemFavo> findByTipoAndStatusOrderByPrecoUnitarioAsc(TipoOrdem tipo, StatusOrdem status);
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT o FROM OrdemFavo o
+        WHERE o.tipo = br.com.ecomel.domain.enums.TipoOrdem.VENDA
+          AND o.status IN (
+                br.com.ecomel.domain.enums.StatusOrdem.ABERTA,
+                br.com.ecomel.domain.enums.StatusOrdem.PARCIALMENTE_EXECUTADA
+          )
+          AND o.precoUnitario <= :preco
+        ORDER BY o.precoUnitario ASC, o.criadoEm ASC
+    """)
+    List<OrdemFavo> findVendasParaMatch(@Param("preco") BigDecimal preco);
 
-    /**
-     * Busca ordens de compra para o vendedor. 
-     * Ordena pelo maior preço primeiro (Melhor oferta de venda).
-     */
-    List<OrdemFavo> findByTipoAndStatusOrderByPrecoUnitarioDesc(TipoOrdem tipo, StatusOrdem status);
-    
-    @Query("SELECT SUM(o.quantidadeRestante) FROM OrdemFavo o WHERE o.carteira.id = :carteiraId AND o.tipo = :tipo AND o.status = :status")
-    BigDecimal sumQuantidadeRestanteByCarteiraAndTipoAndStatus(Long carteiraId, TipoOrdem tipo, StatusOrdem status);
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT o FROM OrdemFavo o
+        WHERE o.tipo = br.com.ecomel.domain.enums.TipoOrdem.COMPRA
+          AND o.status IN (
+                br.com.ecomel.domain.enums.StatusOrdem.ABERTA,
+                br.com.ecomel.domain.enums.StatusOrdem.PARCIALMENTE_EXECUTADA
+          )
+          AND o.precoUnitario >= :preco
+        ORDER BY o.precoUnitario DESC, o.criadoEm ASC
+    """)
+    List<OrdemFavo> findComprasParaMatch(@Param("preco") BigDecimal preco);
 
-    @Query("SELECT SUM(o.quantidadeRestante * o.precoUnitario) FROM OrdemFavo o WHERE o.carteira.id = :carteiraId AND o.tipo = :tipo AND o.status = :status")
-    BigDecimal sumValorEcmBloqueado(Long carteiraId, TipoOrdem tipo, StatusOrdem status);
 
-    /**
-     * Busca ordens de uma carteira específica filtrando por uma coleção de status.
-     * Essencial para listar as 'Minhas Ordens' na Consulta Detalhada.
-     */
-    List<OrdemFavo> findByCarteiraUsuarioIdAndStatusIn(Long usuarioId, Collection<StatusOrdem> statuses);
+    // =====================================================
+    // 📊 BOOK (PAGINADO)
+    // =====================================================
+
+    Page<OrdemFavo> findByTipoAndStatus(
+            TipoOrdem tipo,
+            StatusOrdem status,
+            Pageable pageable
+    );
+
+
+    // =====================================================
+    // 📊 ORDENS POR CARTEIRA (PADRÃO CORRETO)
+    // =====================================================
+
+    List<OrdemFavo> findByCarteiraIdAndStatusIn(
+            Long carteiraId,
+            Collection<StatusOrdem> statuses
+    );
+
+    Page<OrdemFavo> findByCarteiraIdAndStatusIn(
+            Long carteiraId,
+            Collection<StatusOrdem> statuses,
+            Pageable pageable
+    );
+
+    long countByCarteiraIdAndStatusIn(
+            Long carteiraId,
+            Collection<StatusOrdem> statuses
+    );
+
+
+    // =====================================================
+    // 💰 SALDOS BLOQUEADOS (CRÍTICO FINANCEIRO)
+    // =====================================================
+
+    @Query("""
+        SELECT COALESCE(SUM(o.quantidadeRestante), 0)
+        FROM OrdemFavo o
+        WHERE o.carteira.id = :carteiraId
+          AND o.tipo = :tipo
+          AND o.status IN :status
+    """)
+    BigDecimal sumQuantidadeRestanteByCarteiraAndTipoAndStatus(
+            @Param("carteiraId") Long carteiraId,
+            @Param("tipo") TipoOrdem tipo,
+            @Param("status") Collection<StatusOrdem> status
+    );
+
+    @Query("""
+        SELECT COALESCE(SUM(o.quantidadeRestante * o.precoUnitario), 0)
+        FROM OrdemFavo o
+        WHERE o.carteira.id = :carteiraId
+          AND o.tipo = :tipo
+          AND o.status IN :status
+    """)
+    BigDecimal sumValorEcmBloqueado(
+            @Param("carteiraId") Long carteiraId,
+            @Param("tipo") TipoOrdem tipo,
+            @Param("status") Collection<StatusOrdem> status
+    );
+
+
+    // =====================================================
+    // 🔥 IDEMPOTÊNCIA
+    // =====================================================
+
+    boolean existsByRequestKey(String requestKey);
+
 }

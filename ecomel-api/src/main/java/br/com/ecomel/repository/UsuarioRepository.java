@@ -2,56 +2,73 @@ package br.com.ecomel.repository;
 
 import br.com.ecomel.domain.entity.Usuario;
 import br.com.ecomel.domain.enums.StatusUsuario;
-
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
 
-@Repository
 public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
 
-    /**
-     * Busca um usuário pelo e-mail (usado no login e validações).
-     */
-    Optional<Usuario> findByEmail(String email);
+    // =====================================================
+    // 🔐 IDENTIDADE PRINCIPAL (CRIPTO)
+    // =====================================================
 
     /**
-     * Verifica se já existe um e-mail cadastrado para evitar duplicidade.
+     * 🔥 Busca usuário pelo código da carteira (IDENTIDADE REAL DO SISTEMA)
+     */
+    @Query("""
+        SELECT u FROM Usuario u
+        JOIN FETCH u.carteira c
+        WHERE c.codigoCarteira = :codigo
+          AND u.status = :status
+    """)
+    Optional<Usuario> findByCodigoCarteira(
+            @Param("codigo") String codigo,
+            @Param("status") StatusUsuario status
+    );
+
+    /**
+     * 🔥 Busca usuário por ID (uso interno seguro)
+     */
+    @Query("""
+        SELECT u FROM Usuario u
+        JOIN FETCH u.carteira c
+        WHERE u.id = :id
+          AND u.status = :status
+    """)
+    Optional<Usuario> findByIdAtivo(
+            @Param("id") Long id,
+            @Param("status") StatusUsuario status
+    );
+
+    // =====================================================
+    // ⚙️ OPCIONAL (E-MAIL NÃO É IDENTIDADE)
+    // =====================================================
+
+    /**
+     * ⚠️ Apenas para validação (não usar como chave de negócio)
      */
     boolean existsByEmail(String email);
 
-    /**
-     * Verifica se já existe um e-mail cadastrado para evitar duplicidade
-     *  sem levar em consideração o próprio objeto.
-     */
-    
-	boolean existsByEmailAndIdNot(String email, Long id);
-	
-	/*
-	 * Busca o usuário pelo e-mail ou pedo codigo da carteira
-	 */	
-	@Query("SELECT u FROM Usuario u " +
-	        "JOIN FETCH u.carteira c " +
-	        "WHERE (u.email = :login OR c.codigoEndereco = :login) " +
-	        "AND u.status = :statusAtivo") 
-	Optional<Usuario> findByEmailOuCodigoCarteira(
-	    @Param("login") String login, 
-	    @Param("statusAtivo") StatusUsuario statusAtivo
-	);
+    boolean existsByEmailAndIdNot(String email, Long id);
 
-    /*
-     * Busca o usuario por id 
-     */    
-    @Query("SELECT u FROM Usuario u " +
-            "JOIN FETCH u.carteira c " +
-            "WHERE u.id = :id " +
-            "AND u.status = :statusAtivo")
-    Optional<Usuario> findByPorId(
-        @Param("id") Long id, 
-        @Param("statusAtivo") StatusUsuario statusAtivo
+    // =====================================================
+    // 🔄 LOGIN FLEXÍVEL (SE QUISER SUPORTAR AMBOS)
+    // =====================================================
+
+    /**
+     * 🔥 Permite login por código da carteira OU e-mail (opcional)
+     * Mas a identidade real continua sendo a carteira
+     */
+    @Query("""
+        SELECT u FROM Usuario u
+        JOIN FETCH u.carteira c
+        WHERE (c.codigoCarteira = :login OR u.email = :login)
+          AND u.status = :status
+    """)
+    Optional<Usuario> findByLogin(
+            @Param("login") String login,
+            @Param("status") StatusUsuario status
     );
-    
 }

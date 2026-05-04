@@ -9,7 +9,6 @@ import org.springframework.data.annotation.LastModifiedBy;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Getter
@@ -23,23 +22,27 @@ public abstract class BaseAuditavel {
     private Long id;
 
     @CreatedDate
-    @Column(nullable = false, updatable = false)
+    @Column(name = "criado_em", nullable = false, updatable = false)
     private LocalDateTime criadoEm;
 
     @CreatedBy
-    @Column(updatable = false)
+    @Column(name = "criado_por", updatable = false)
     private String criadoPor;
 
     @LastModifiedDate
+    @Column(name = "atualizado_em")
     private LocalDateTime atualizadoEm;
 
     @LastModifiedBy
+    @Column(name = "atualizado_por")
     private String atualizadoPor;
 
+    @Column(name = "desativado_em")
     private LocalDateTime desativadoEm;
 
+    @Column(name = "desativado_por")
     private String desativadoPor;
 
-    @Column(nullable = false)
+    @Column(name = "ativo", nullable = false)
     private boolean ativo = true;
 }
